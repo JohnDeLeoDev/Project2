@@ -5,17 +5,44 @@
         <title>CS 4731 Final Project Part I</title>
         <script id="vshader" type="x-shader/x-vertex">
             attribute vec4 vPosition;
+            attribute vec4 vNormal;
+            attribute vec2 vTexCoord;
+            attribute vec4 vColor;
 
-            void main() {
-                gl_Position = vPosition;
+            uniform mat4 modelMatrix;
+            uniform mat4 viewMatrix;
+
+            uniform vec4 lightPosition;
+            uniform vec4 lightAmbient;
+            uniform vec4 lightDiffuse;
+            uniform vec4 lightSpecular;
+
+            varying highp vec2 fTexCoord;
+            varying vec4 fNormal;
+
+
+            varying vec4 fColor;
+
+            void main(void) {
+                gl_Position = viewMatrix * modelMatrix * vPosition;
+                fTexCoord = vTexCoord;
+                fNormal = viewMatrix * modelMatrix * vNormal;
+                fColor = vColor;
+
             }
         </script>
 
         <script id="fshader" type="x-shader/x-fragment">
             precision mediump float;
-            void main() {
-                    gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);
-                }
+            varying highp vec2 fTexCoord;
+            uniform sampler2D uTexture;
+
+            varying vec4 fNormal;
+            varying vec4 fColor;
+
+            void main(void) {
+                gl_FragColor = fColor;
+            }
         </script>
 
         <script type="text/javascript" src="lib/webgl-utils.js"></script>
@@ -28,7 +55,7 @@
 
     </head>
 
-    <body onload="main()">
+    <body>
         <h1 id="mode">CS 4731 Final Project</h1>
 
         <canvas id="webgl" class="box" width="1600" height="900">
