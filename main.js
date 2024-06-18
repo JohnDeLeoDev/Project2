@@ -13,6 +13,8 @@ function main() {
         gl.viewport(0, 0, canvas.width, canvas.height);
         gl.clearColor(0.0, 0.0, 0.0, 1.0);
         gl.enable(gl.DEPTH_TEST);
+        gl.enable(gl.CULL_FACE);
+        gl.cullFace(gl.BACK);
 
         let program = initShaders(gl, "vshader", "fshader");
         gl.useProgram(program);
@@ -62,8 +64,9 @@ function main() {
 
         for (let key in objects) {
             objects[key].materialColors = objects[key].getMaterialColors();
-            objects[key].modelMatrix = mat4();
         }
+
+        objects.car.scale = [0.01, 0.01, 0.01];
 
         console.log("Models loaded.");
     }
@@ -134,26 +137,28 @@ function main() {
 
     // function to setup the camera
     function createViewMatrix() {
-        let eye = vec3(0.0, 10, 20);
-        let at = vec3(0.0, -5, -5);
+        let eye = vec3(0.0, 4, 8);
+        let at = vec3(0.0, -2, -5);
         let up = vec3(0.0, 1.0, 0.0);
         let fov = 45
         let near = 0.1;
         let far = 100;
         let aspect = canvas.width / canvas.height;
 
-        // combine the perspective and lookAt matrices
-        let viewMatrix = mult(perspective(fov, aspect, near, far), lookAt(eye, at, up));
-
-        return viewMatrix;
+        return lookAt(eye, at, up);
     }
+
+    function createProjectionMatrix() {
+        return perspective(45, canvas.width / canvas.height, 0.1, 100);
+    }
+
     /*****************************************************************************************************************/
     // function to setup lighting
     /*****************************************************************************************************************/
     function setupLighting(gl, shaderProgram) {
-        const lightPosition = [0.0, 0.0, 0.0, 1.0];
-        const ambientLight = [0.2, 0.2, 0.2, 1.0];
-        const diffuseLight = [0.8, 0.8, 0.8, 1.0];
+        const lightPosition = [10.0, 10.0, 0.0, 1.0];
+        const ambientLight = [1.0, 1.0, 1.0, 1.0];
+        const diffuseLight = [0.6, 0.6, 0.6, 1.0];
         const specularLight = [1.0, 1.0, 1.0, 1.0];
 
         gl.uniform4fv(gl.getUniformLocation(shaderProgram, 'lightPosition'), lightPosition);
@@ -219,15 +224,16 @@ function main() {
             }
         }
 
-        gl.uniformMatrix4fv(gl.getUniformLocation(program, "modelMatrix"), false, flatten(model.modelMatrix));
         gl.uniformMatrix4fv(gl.getUniformLocation(program, "viewMatrix"), false, flatten(viewMatrix));
+        gl.uniformMatrix4fv(gl.getUniformLocation(program, "projectionMatrix"), false, flatten(projectionMatrix));
+        gl.uniformMatrix4fv(gl.getUniformLocation(program, "translationMatrix"), false, flatten(model.translation));
+        gl.uniformMatrix4fv(gl.getUniformLocation(program, "rotationMatrix"), false, flatten(model.rotation));
+        gl.uniformMatrix4fv(gl.getUniformLocation(program, "scaleMatrix"), false, flatten(model.scale));
         gl.uniform1i(gl.getUniformLocation(program, "uTexture"), 0);
 
         gl.drawArrays(gl.TRIANGLES, 0, model.getVertices().length);
 
         disableAttributes(gl, program);
-
-
     }
 
     function disableAttributes(gl, program) {
@@ -242,29 +248,8 @@ function main() {
         gl.disableVertexAttribArray(vTexCoord);
     }
 
-    function enableAttributes(gl, program) {
-        let vPosition = gl.getAttribLocation(program, "vPosition");
-        let vNormal = gl.getAttribLocation(program, "vNormal");
-        let vColor = gl.getAttribLocation(program, "vColor");
-        let vTexCoord = gl.getAttribLocation(program, "vTexCoord");
-
-        gl.enableVertexAttribArray(vPosition);
-        gl.enableVertexAttribArray(vNormal);
-        gl.enableVertexAttribArray(vColor);
-        gl.enableVertexAttribArray(vTexCoord);
-    }
-
     /*****************************************************************************************************************/
-    // function to update the model matrix of a model
-    function updateModelMatrix(model, position, rotation, scale) {
-        let modelMatrix = mat4();
-        modelMatrix = mult(modelMatrix, translate(position));
-        modelMatrix = mult(modelMatrix, rotate(rotation[0], vec3(1, 0, 0)));
-        modelMatrix = mult(modelMatrix, rotate(rotation[1], vec3(0, 1, 0)));
-        modelMatrix = mult(modelMatrix, rotate(rotation[2], vec3(0, 0, 1)));
-        modelMatrix = mult(modelMatrix, scalem(scale));
-        model.modelMatrix = modelMatrix;
-    }
+
     /*****************************************************************************************************************/
     // main render loop
     /*****************************************************************************************************************/
@@ -278,28 +263,90 @@ function main() {
         drawModel(gl, program, objects.stopSign);
         drawModel(gl, program, objects.bunny);
 
+        moveCar(t);
+
         requestAnimationFrame(render);
+
+        t += 0.01;
     }
     /*****************************************************************************************************************/
 
-
+    let t = 0;
     let viewMatrix = createViewMatrix();
+    let projectionMatrix = createProjectionMatrix();
+
+    let boundary = 3.4;
+    let carPath = [
+        vec3(-boundary, 0, -boundary),
+        vec3(-boundary, 0, boundary),
+        vec3(boundary, 0, boundary),
+        vec3(boundary, 0, -boundary),
+        vec3(-boundary, 0, -boundary)
+    ];
+
+    // make smooth path for the car
+    let carPathSmooth = [];
+    for (let i = 0; i < carPath.length - 1; i++) {
+        let p0 = carPath[i];
+        let p1 = carPath[i + 1];
+        carPathSmooth.push(p0);
+        carPathSmooth.push(mix(p0, p1, 0.33));
+        carPathSmooth.push(mix(p0, p1, 0.66));
+    }
+
+    // make the car move along the path
+    function moveCar(t) {
+        let i = Math.floor(t) % carPathSmooth.length;
+        let p0 = carPathSmooth[i];
+        let p1 = carPathSmooth[(i + 1) % carPathSmooth.length];
+        let p = mix(p0, p1, t - Math.floor(t));
+
+        // -3, 3             3, 3
+
+        // -3, -3            3, -3
+
+        if (p0[0] + boundary < 0.1 && p0[2] + boundary < 0.1) {
+            console.log("Left Side");
+            objects.car.rotation = rotateY(0);
+        }
+
+        if (p0[0] - boundary > -0.1 && p0[2] - boundary > -0.1) {
+            console.log("Right Side");
+            objects.car.rotation = rotateY(180);
+        }
+
+        if (p0[0] + boundary < 0.1 && p0[2] - boundary > -0.1) {
+            console.log("Bottom Side");
+            objects.car.rotation = rotateY(90);
+        }
+
+        if (p0[0] - boundary > -0.1 && p0[2] + boundary < 0.1) {
+            console.log("Top Side");
+            objects.car.rotation = rotateY(270);
+        }
+
+
+        objects.car.translation = translate(p[0], p[1], p[2]);
+    }
+
+    function setupScene() {
+        objects.car.translation = translate(-3.4, 0, -1);
+        objects.car.scale = scalem(0.5, 0.5, 0.5);
+        objects.stopSign.translation = translate(4.5, 0, 0);
+        objects.stopSign.rotation = rotateY(-90);
+        objects.bunny.translation = translate(-1, 0, 0);
+    }
+
 
     initModels().then(() => {
         initBuffers(gl).then(() => {
             loadTextures(gl).then(() => {
-                updateModelMatrix(objects.car, vec3(3, 0, 0), vec3(0, 0, 0), vec3(0.75, 0.75, 0.75));
-                updateModelMatrix(objects.street, vec3(0, 0, 0), vec3(0, 0, 0), vec3(1, 1, 1));
-                updateModelMatrix(objects.lamp, vec3(0, 0, 0), vec3(0, 0, 0), vec3(1, 1, 1));
-                updateModelMatrix(objects.stopSign, vec3(5, 0, 0), vec3(0, 0, 0), vec3(1, 1, 1));
-                updateModelMatrix(objects.bunny, vec3(-1, 0, 0), vec3(0, 0, 0), vec3(1, 1, 1));
                 setupLighting(gl, program);
+                setupScene();
                 render();
             });
         });
     });
-
-
 }
 
 window.onload = main;
