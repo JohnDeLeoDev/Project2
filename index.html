@@ -1,56 +1,89 @@
 <!DOCTYPE html>
 <html>
     <head>
-        <meta charset="UTF-8">
+        <meta charset="UTF-8" />
         <title>CS 4731 Final Project Part I</title>
-        <script id="vshader" type="x-shader/x-vertex">
-            attribute vec4 vPosition;
-            attribute vec4 vNormal;
-            attribute vec2 vTexCoord;
-            attribute vec4 vColor;
 
-            uniform mat4 projectionMatrix;
-            uniform mat4 translationMatrix;
-            uniform mat4 rotationMatrix;
-            uniform mat4 scaleMatrix;
-            uniform mat4 viewMatrix;
+        <script id="main-vshader" type="x-shader/x-vertex">
+            attribute vec4 vPosition;  //
+            attribute vec4 vNormal; //
+            attribute vec2 vTexCoord; //
+
+            attribute vec4 diffuseColor; //
+            attribute vec4 specularColor; //
+            attribute vec4 ambientColor; //
+
+            uniform mat4 cameraView; //
+            uniform mat4 cameraProjection; //
+            uniform mat4 modelTranslation; //
+            uniform mat4 modelRotation; //
+            uniform mat4 modelScale; //
 
             varying highp vec2 fTexCoord;
+            varying vec4 fDiffuseColor;
+            varying vec4 fSpecularColor;
+            varying vec4 fAmbientColor;
+            varying vec4 vPositionInLightSpace;
             varying vec4 fNormal;
-
-            varying vec4 fColor;
+            varying vec4 fPosition;
 
             void main(void) {
-                gl_Position = projectionMatrix * viewMatrix * translationMatrix * rotationMatrix * scaleMatrix * vPosition;
                 fTexCoord = vTexCoord;
-                fNormal = vNormal;
-                fColor = vColor;
+
+                fDiffuseColor = diffuseColor;
+                fSpecularColor = specularColor;
+                fAmbientColor = ambientColor;
+
+                fNormal = normalize(modelRotation * vNormal);
+
+                // position of the vertex in the world space
+                fPosition = modelTranslation * modelRotation * modelScale * vPosition;
+
+                // position of the vertex in the camera space
+                gl_Position = cameraProjection * cameraView * fPosition;
             }
         </script>
 
-        <script id="fshader" type="x-shader/x-fragment">
+        <script id="main-fshader" type="x-shader/x-fragment">
             precision mediump float;
-            varying highp vec2 fTexCoord;
-            uniform sampler2D uTexture;
+            uniform sampler2D modelTexture; //
+
+            uniform bool useTexture; //
 
             varying vec4 fNormal;
-            varying vec4 fColor;
+            varying vec4 fDiffuseColor;
+            varying vec4 fSpecularColor;
+            varying vec4 fAmbientColor;
+            varying vec4 vPositionInLightSpace;
+            varying vec4 fPosition;
+            varying highp vec2 fTexCoord;
 
-            uniform vec4 lightPosition;
-            uniform vec4 lightAmbient;
-            uniform vec4 lightDiffuse;
-            uniform vec4 lightSpecular;
+            uniform vec4 lightPosition; //
+            uniform vec4 lightAmbient; //
+            uniform vec4 lightDiffuse; //
+            uniform vec4 lightSpecular; //
+            uniform bool lightOn; //
 
             void main(void) {
-                vec4 N = normalize(fNormal);
-                vec4 L = normalize(lightPosition - fColor);
-                vec4 V = normalize(-fColor);
-                vec4 H = normalize(L + V);
+                vec4 texColor = useTexture ? texture2D(modelTexture, fTexCoord) : vec4(1.0);
 
-                float Kd = max(dot(L, N), 0.0);
-                float Ks = pow(max(dot(N, H), 0.0), 100.0);
+                vec4 normal = normalize(fNormal);
+                vec4 lightDir = normalize(lightPosition - fPosition);
+                vec4 reflectDir = reflect(-lightDir, normal);
+                vec4 viewDir = normalize(-fPosition);
+                float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32.0);
 
-                gl_FragColor = fColor * (lightAmbient + Kd * lightDiffuse + Ks * lightSpecular);
+                vec4 ambient = lightAmbient * fAmbientColor;
+                vec4 diffuse = lightDiffuse * fDiffuseColor * max(dot(normal, lightDir), 0.0);
+                vec4 specular = lightSpecular * fSpecularColor * spec;
+
+                if (!lightOn) {
+                    diffuse = vec4(0.0, 0.0, 0.0, 1.0);
+                    specular = vec4(0.0, 0.0, 0.0, 1.0);
+                }
+
+                gl_FragColor = (ambient + diffuse + specular) * texColor;
+
             }
         </script>
 
@@ -60,14 +93,17 @@
 
         <script type="text/javascript" src="lib/model.js"></script>
         <script type="text/javascript" src="lib/face.js"></script>
-        <script type="text/javascript" src="main.js"></script>
+        <script type="text/javascript" src="lib/camera.js"></script>
+        <script type="text/javascript" src="lib/shaders.js"></script>
+        <script type="text/javascript" src="lib/light.js"></script>
 
+        <script type="text/javascript" src="main.js"></script>
     </head>
 
     <body>
         <h1 id="mode">CS 4731 Final Project</h1>
 
-        <canvas id="webgl" class="box" width="1600" height="900">
+        <canvas id="webgl" class="box" width="1600" height="1600">
             Please use a browser that supports the "canvas" tag.
         </canvas>
     </body>
