@@ -162,6 +162,7 @@ function initWebGL() {
     gl.cullFace(gl.BACK)
 
     programs.main = initShaders(gl, 'main-vshader', 'main-fshader')
+    programs.shadow = initShaders(gl, 'shadow-vshader', 'shadow-fshader')
 
     gl.useProgram(programs.main)
 }
@@ -233,6 +234,9 @@ async function initModels() {
         models[model].specularColors = models[model].getSpecularColors()
     }
 
+    programs.main.models = models
+    programs.shadow.models = models
+
     console.log('Models loaded')
 }
 
@@ -303,6 +307,10 @@ async function initBuffers() {
         }
     }
 
+    // add buffers to programs dictionary
+    programs.main.models = models
+    programs.shadow.models = models
+
     console.log('Buffers initialized')
 }
 
@@ -342,6 +350,7 @@ async function loadTextures() {
                 1
             )
         }
+        programs.main.models = models
     }
     console.log('Textures loaded')
 }
@@ -361,7 +370,7 @@ function findTopOfLamp() {
 function setupLighting() {
     gl.useProgram(programs.main)
 
-    let position = vec4(0, findTopOfLamp() - 1.0, 0, 1.0)
+    let position = vec4(0, findTopOfLamp() + 0.5, 0, 1.0)
 
     const diffuseLight = [0.8, 0.8, 0.8, 1.0]
     const ambientLight = [0.3, 0.3, 0.3, 1.0]
@@ -388,10 +397,13 @@ function setupLighting() {
     let lightBool = gl.getUniformLocation(programs.main, 'lightOn')
     gl.uniform1i(lightBool, mainVariables.lightOn)
 
-    let shadowMapLocation = gl.getUniformLocation(programs.main, 'shadowMap')
-    gl.uniform1i(shadowMapLocation, 0)
-    gl.activeTexture(gl.TEXTURE0)
-    gl.bindTexture(gl.TEXTURE_CUBE_MAP, textures.cubeMap)
+    programs.main.uniforms = {
+        lightPosition: lightPositionInMain,
+        lightDiffuse: diffuseUniform,
+        lightAmbient: ambientUniform,
+        lightSpecular: specularUniform,
+        lightOn: lightBool,
+    }
 
     console.log('Lighting setup')
 }
@@ -426,6 +438,58 @@ function setupScene() {
     models.stopSign.setRotation(rotateY(-90))
 }
 
+function addAttributesMain() {
+    let vPosition = gl.getAttribLocation(programs.main, 'vPosition')
+    let vNormal = gl.getAttribLocation(programs.main, 'vNormal')
+    let vTexCoord = gl.getAttribLocation(programs.main, 'vTexCoord')
+    let diffuseColor = gl.getAttribLocation(programs.main, 'diffuseColor')
+    let specularColor = gl.getAttribLocation(programs.main, 'specularColor')
+    let ambientColor = gl.getAttribLocation(programs.main, 'ambientColor')
+
+    programs.main.attributes = {
+        vPosition: vPosition,
+        vNormal: vNormal,
+        vTexCoord: vTexCoord,
+        diffuseColor: diffuseColor,
+        specularColor: specularColor,
+        ambientColor: ambientColor,
+    }
+}
+
+function disableAttributes(program) {
+    for (let attr in program.attributes) {
+        gl.disableVertexAttribArray(program.attributes[attr])
+    }
+}
+
+function addUniformsMain() {
+    let cameraView = gl.getUniformLocation(programs.main, 'cameraView')
+    let cameraProjection = gl.getUniformLocation(
+        programs.main,
+        'cameraProjection'
+    )
+    let modelTranslation = gl.getUniformLocation(
+        programs.main,
+        'modelTranslation'
+    )
+    let modelRotation = gl.getUniformLocation(programs.main, 'modelRotation')
+    let modelScale = gl.getUniformLocation(programs.main, 'modelScale')
+    let useTexture = gl.getUniformLocation(programs.main, 'useTexture')
+    let modelTexture = gl.getUniformLocation(programs.main, 'modelTexture')
+    let lightOn = gl.getUniformLocation(programs.main, 'lightOn')
+    let lightPosition = gl.getUniformLocation(programs.main, 'lightPosition')
+
+    programs.main.uniforms.cameraView = cameraView
+    programs.main.uniforms.cameraProjection = cameraProjection
+    programs.main.uniforms.modelTranslation = modelTranslation
+    programs.main.uniforms.modelRotation = modelRotation
+    programs.main.uniforms.modelScale = modelScale
+    programs.main.uniforms.useTexture = useTexture
+    programs.main.uniforms.modelTexture = modelTexture
+    programs.main.uniforms.lightOn = lightOn
+    programs.main.uniforms.lightPosition = lightPosition
+}
+
 function drawModel(program, model) {
     gl.useProgram(program)
 
@@ -435,7 +499,7 @@ function drawModel(program, model) {
         return
     }
 
-    let vPosition = gl.getAttribLocation(program, 'vPosition')
+    let vPosition = program.attributes['vPosition']
     if (vPosition < 0) {
         console.log('Failed to get vPosition attribute')
         return
@@ -445,7 +509,7 @@ function drawModel(program, model) {
         gl.enableVertexAttribArray(vPosition)
     }
 
-    let vNormal = gl.getAttribLocation(program, 'vNormal')
+    let vNormal = program.attributes['vNormal']
     if (vNormal < 0) {
         console.log('Failed to get vNormal attribute')
         return
@@ -458,7 +522,7 @@ function drawModel(program, model) {
     if (model.getTexCoords().length === 0) {
         gl.uniform1i(gl.getUniformLocation(program, 'useTexture'), 0)
     } else {
-        let vTexCoord = gl.getAttribLocation(program, 'vTexCoord')
+        let vTexCoord = program.attributes['vTexCoord']
         if (vTexCoord < 0) {
             console.log('Failed to get vTexCoord attribute')
             return
@@ -471,7 +535,7 @@ function drawModel(program, model) {
         }
     }
 
-    let diffuseColor = gl.getAttribLocation(program, 'diffuseColor')
+    let diffuseColor = program.attributes['diffuseColor']
     if (diffuseColor < 0) {
         console.log('Failed to get vColor attribute')
         return
@@ -486,7 +550,7 @@ function drawModel(program, model) {
         gl.enableVertexAttribArray(diffuseColor)
     }
 
-    let specularColor = gl.getAttribLocation(program, 'specularColor')
+    let specularColor = program.attributes['specularColor']
 
     if (specularColor < 0) {
         console.log('Failed to get vColor attribute')
@@ -502,7 +566,7 @@ function drawModel(program, model) {
         gl.enableVertexAttribArray(specularColor)
     }
 
-    let ambientColor = gl.getAttribLocation(program, 'ambientColor')
+    let ambientColor = program.attributes['ambientColor']
 
     if (ambientColor < 0) {
         console.log('Failed to get vColor attribute')
@@ -519,63 +583,51 @@ function drawModel(program, model) {
     }
 
     gl.uniformMatrix4fv(
-        gl.getUniformLocation(program, 'cameraView'),
+        program.uniforms.cameraView,
         false,
         flatten(cameras.mainCamera.viewMatrix())
     )
 
     gl.uniformMatrix4fv(
-        gl.getUniformLocation(program, 'cameraProjection'),
+        program.uniforms.cameraProjection,
         false,
         flatten(cameras.mainCamera.projectionMatrix())
     )
 
     gl.uniformMatrix4fv(
-        gl.getUniformLocation(program, 'modelTranslation'),
+        program.uniforms.modelTranslation,
         false,
         flatten(model.getTranslation())
     )
     gl.uniformMatrix4fv(
-        gl.getUniformLocation(program, 'modelRotation'),
+        program.uniforms.modelRotation,
         false,
         flatten(model.getRotation())
     )
     gl.uniformMatrix4fv(
-        gl.getUniformLocation(program, 'modelScale'),
+        program.uniforms.modelScale,
         false,
         flatten(model.getScale())
     )
 
-    gl.uniform1i(
-        gl.getUniformLocation(program, 'useTexture'),
-        model.textured ? 1 : 0
-    )
+    gl.uniform1i(program.uniforms.useTexture, model.textured ? 1 : 0)
     gl.uniform1i(
         gl.getUniformLocation(program, 'lightOn'),
         mainVariables.lightOn ? 1 : 0
     )
 
     gl.uniform4fv(
-        gl.getUniformLocation(program, 'lightPosition'),
+        program.uniforms.lightPosition,
         flatten(lights.mainLight.position)
     )
 
     gl.activeTexture(gl.TEXTURE1)
     gl.bindTexture(gl.TEXTURE_2D, model.texture)
-    gl.uniform1i(gl.getUniformLocation(program, 'modelTexture'), 1)
+    gl.uniform1i(program.uniforms.modelTexture, 1)
 
     gl.drawArrays(gl.TRIANGLES, 0, model.getVertices().length / 4)
 
-    gl.disableVertexAttribArray(vPosition)
-    gl.disableVertexAttribArray(vNormal)
-    gl.disableVertexAttribArray(diffuseColor)
-    gl.disableVertexAttribArray(specularColor)
-    gl.disableVertexAttribArray(ambientColor)
-
-    if (model.getTexCoords().length > 0) {
-        let vTexCoord = gl.getAttribLocation(program, 'vTexCoord')
-        gl.disableVertexAttribArray(vTexCoord)
-    }
+    disableAttributes(program)
 
     gl.bindTexture(gl.TEXTURE_2D, null)
 }
@@ -586,9 +638,12 @@ function render() {
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
     for (let model in models) {
-        drawModel(programs.main, models[model])
+        drawModel(programs.main, programs.main.models[model])
         for (let childModel in models[model].embeddedObjects) {
-            drawModel(programs.main, models[model].embeddedObjects[childModel])
+            drawModel(
+                programs.main,
+                programs.main.models[model].embeddedObjects[childModel]
+            )
         }
     }
 
@@ -616,6 +671,8 @@ function main() {
                 setupCamera()
                 setupScene()
                 createEventListeners()
+                addAttributesMain()
+                addUniformsMain()
                 render()
             })
         })
