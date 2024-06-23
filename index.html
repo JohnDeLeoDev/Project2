@@ -19,6 +19,8 @@
             uniform mat4 modelRotation; //
             uniform mat4 modelScale; //
 
+            uniform mat4 shadowMatrix; //
+
             varying highp vec2 fTexCoord;
             varying vec4 fDiffuseColor;
             varying vec4 fSpecularColor;
@@ -26,6 +28,8 @@
             varying vec4 vPositionInLightSpace;
             varying vec4 fNormal;
             varying vec4 fPosition;
+
+            varying vec4 vProjectedTexCoords;
 
             void main(void) {
                 fTexCoord = vTexCoord;
@@ -39,6 +43,8 @@
                 // position of the vertex in the world space
                 fPosition = modelTranslation * modelRotation * modelScale * vPosition;
 
+                vProjectedTexCoords = shadowMatrix * fPosition;
+
                 // position of the vertex in the camera space
                 gl_Position = cameraProjection * cameraView * fPosition;
             }
@@ -46,7 +52,9 @@
 
         <script id="main-fshader" type="x-shader/x-fragment">
             precision mediump float;
+
             uniform sampler2D modelTexture; //
+            uniform sampler2D shadowTexture; //
 
             uniform bool useTexture; //
 
@@ -57,14 +65,41 @@
             varying vec4 vPositionInLightSpace;
             varying vec4 fPosition;
             varying highp vec2 fTexCoord;
+            varying vec4 vProjectedTexCoords;
 
             uniform vec4 lightPosition; //
             uniform vec4 lightAmbient; //
             uniform vec4 lightDiffuse; //
             uniform vec4 lightSpecular; //
+
             uniform bool lightOn; //
+            uniform bool shadowEnable; //
 
             void main(void) {
+                float bias = 0.0;
+                vec3 projectedTexCoord = vProjectedTexCoords.xyz / vProjectedTexCoords.w;
+                float currentDepth = projectedTexCoord.z + bias;
+
+                bool inRange =
+                    projectedTexCoord.x >= 0.0 &&
+                    projectedTexCoord.x <= 1.0 &&
+                    projectedTexCoord.y >= 0.0 &&
+                    projectedTexCoord.y <= 1.0;
+
+                float projectedDepth = texture2D(shadowTexture, projectedTexCoord.xy).r;
+
+                vec3 shadowColor = vec3(0.5, 0.5, 0.5);
+                vec3 shadowFactor = vec3(1.0, 1.0, 1.0);
+
+                // if the current fragment is in the shadow, then darken it
+                if (inRange && projectedDepth < currentDepth) {
+                    shadowFactor = vec3(0.0, 0.0, 0.0);
+                }
+
+                shadowColor = shadowColor - shadowFactor;
+
+
+
                 vec4 texColor = useTexture ? texture2D(modelTexture, fTexCoord) : vec4(1.0);
 
                 vec4 normal = normalize(fNormal);
@@ -82,22 +117,48 @@
                     specular = vec4(0.0, 0.0, 0.0, 1.0);
                 }
 
-                gl_FragColor = (ambient + diffuse + specular) * texColor;
+                gl_FragColor = vec4(shadowColor, 1.0) * (ambient + diffuse + specular) * texColor;
 
             }
         </script>
 
         <script id="shadow-vshader" type="x-shader/x-vertex">
+            attribute vec4 vPosition;  // position of the vertex in model space
+
+            // light transformation matrices
+            uniform mat4 lightView; // view matrix of the light
+            uniform mat4 lightProjection; // projection matrix of the light
+
+            // world transformation matrices
+            uniform mat4 modelTranslation; // translation matrix of the model
+            uniform mat4 modelRotation; // rotation matrix of the model
+            uniform mat4 modelScale; // scale matrix of the model
+
+            varying vec4 fPosition; // position of the vertex in the world space
+
+            varying vec4 vPositionInLightSpace;
 
             void main(void) {
+                // position of the vertex in the world space
+                fPosition = modelTranslation * modelRotation * modelScale * vPosition;
 
+                vPositionInLightSpace = lightProjection * lightView * fPosition;
+
+
+                // position of the vertex in the camera space
+                gl_Position = lightProjection * lightView * fPosition;
             }
         </script>
 
         <script id="shadow-fshader" type="x-shader/x-fragment">
+            precision mediump float;
+
+            varying vec4 fPosition; // position of the vertex in the world space
 
             void main(void) {
+                vec4 uColor = vec4(1.0, 0.0, 0.0, 1.0);
 
+                gl_FragColor = uColor;
             }
         </script>
 

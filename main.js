@@ -3,6 +3,7 @@ let canvas
 let gl
 let programs = {}
 let models = {}
+models.buffers
 let lights = {}
 let cameras = {}
 let textures = {}
@@ -10,11 +11,12 @@ let mainVariables = {
     lightOn: true,
     shadowEnabled: true,
     carBoundary: 3.1,
-    cameraMoving: false,
+    cameraMoving: true,
     cameraFollowing: false,
     carMoving: false,
     t: 0,
-    shadowMapSize: 1024,
+    shadowMapSize: 2048,
+    sceneSize: 10,
 }
 let carPath = [
     vec3(-mainVariables.carBoundary, -0.1, -mainVariables.carBoundary),
@@ -103,42 +105,22 @@ function createEventListeners() {
             )
         }
 
-        /*
-
         if (event.key === 'd') {
-            mainVariables.cameraFollowing = !mainVariables.cameraFollowing;
-            mainVariables.cameraMoving = false;
-            console.log("Camera is now " + (mainVariables.cameraFollowing ? "following" : "not following"));
+            mainVariables.cameraFollowing = !mainVariables.cameraFollowing
+            mainVariables.cameraMoving = false
+            console.log(
+                'Camera is now ' +
+                    (mainVariables.cameraFollowing
+                        ? 'following'
+                        : 'not following')
+            )
         }
         if (event.key === 's') {
-            mainVariables.shadowEnabled = !mainVariables.shadowEnabled;
-            console.log("Shadow is now " + (mainVariables.shadowEnabled ? "enabled" : "disabled"));
-        }
-        */
-
-        if (event.key === 'w') {
-            cameras.mainCamera.moveTo(
-                add(cameras.mainCamera.getLocation(), vec3(0, 0, -1))
+            mainVariables.shadowEnabled = !mainVariables.shadowEnabled
+            console.log(
+                'Shadow is now ' +
+                    (mainVariables.shadowEnabled ? 'enabled' : 'disabled')
             )
-            console.log(cameras.mainCamera.getLocation())
-        }
-        if (event.key === 'a') {
-            cameras.mainCamera.moveTo(
-                add(cameras.mainCamera.getLocation(), vec3(-1, 0, 0))
-            )
-            console.log(cameras.mainCamera.getLocation())
-        }
-        if (event.key === 's') {
-            cameras.mainCamera.moveTo(
-                add(cameras.mainCamera.getLocation(), vec3(0, 0, 1))
-            )
-            console.log(cameras.mainCamera.getLocation())
-        }
-        if (event.key === 'd') {
-            cameras.mainCamera.moveTo(
-                add(cameras.mainCamera.getLocation(), vec3(1, 0, 0))
-            )
-            console.log(cameras.mainCamera.getLocation())
         }
     })
 }
@@ -158,8 +140,9 @@ function initWebGL() {
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
     gl.enable(gl.DEPTH_TEST)
-    gl.enable(gl.CULL_FACE)
-    gl.cullFace(gl.BACK)
+
+    // enable depth extension
+    gl.getExtension('WEBGL_depth_texture')
 
     programs.main = initShaders(gl, 'main-vshader', 'main-fshader')
     programs.shadow = initShaders(gl, 'shadow-vshader', 'shadow-fshader')
@@ -294,10 +277,86 @@ async function initModelBuffers(model) {
         )
     }
 
+    gl.useProgram(programs.shadow)
+
+    modelBuffers.vPosShadow = gl.createBuffer()
+    gl.bindBuffer(gl.ARRAY_BUFFER, modelBuffers.vPosShadow)
+    gl.bufferData(
+        gl.ARRAY_BUFFER,
+        new Float32Array(model.getVertices()),
+        gl.STATIC_DRAW
+    )
+
+    gl.useProgram(programs.main)
+
     model.buffers = modelBuffers
 }
 
+async function initShadowBuffers() {
+    gl.useProgram(programs.shadow)
+    let shadowBuffers = {}
+
+    programs.shadow.depthTexture = gl.createTexture()
+
+    gl.bindTexture(gl.TEXTURE_2D, programs.shadow.depthTexture)
+    gl.texImage2D(
+        gl.TEXTURE_2D,
+        0,
+        gl.DEPTH_COMPONENT,
+        mainVariables.shadowMapSize,
+        mainVariables.shadowMapSize,
+        0,
+        gl.DEPTH_COMPONENT,
+        gl.UNSIGNED_INT,
+        null
+    )
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+
+    programs.shadow.framebuffer = gl.createFramebuffer()
+    gl.bindFramebuffer(gl.FRAMEBUFFER, programs.shadow.framebuffer)
+    gl.framebufferTexture2D(
+        gl.FRAMEBUFFER,
+        gl.DEPTH_ATTACHMENT,
+        gl.TEXTURE_2D,
+        programs.shadow.depthTexture,
+        0
+    )
+
+    let unusedTexture = gl.createTexture()
+    gl.bindTexture(gl.TEXTURE_2D, unusedTexture)
+    gl.texImage2D(
+        gl.TEXTURE_2D,
+        0,
+        gl.RGBA,
+        mainVariables.shadowMapSize,
+        mainVariables.shadowMapSize,
+        0,
+        gl.RGBA,
+        gl.UNSIGNED_BYTE,
+        null
+    )
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+
+    gl.framebufferTexture2D(
+        gl.FRAMEBUFFER,
+        gl.COLOR_ATTACHMENT0,
+        gl.TEXTURE_2D,
+        unusedTexture,
+        0
+    )
+
+    console.log('Shadow buffers initialized')
+}
+
 async function initBuffers() {
+    await initShadowBuffers()
+
     for (let [name, model] of Object.entries(models)) {
         await initModelBuffers(model)
         for (let [childName, childModel] of Object.entries(
@@ -370,7 +429,7 @@ function findTopOfLamp() {
 function setupLighting() {
     gl.useProgram(programs.main)
 
-    let position = vec4(0, findTopOfLamp() + 0.5, 0, 1.0)
+    let position = vec4(0, findTopOfLamp() + 0.0, 0, 1.0)
 
     const diffuseLight = [0.8, 0.8, 0.8, 1.0]
     const ambientLight = [0.3, 0.3, 0.3, 1.0]
@@ -438,6 +497,31 @@ function setupScene() {
     models.stopSign.setRotation(rotateY(-90))
 }
 
+function setupShadows() {
+    gl.useProgram(programs.shadow)
+
+    // look at [posX, posY, posZ]
+    programs.shadow.lightView = lookAt(
+        vec3(0, findTopOfLamp() + 0.0, 0),
+        vec3(0, 0, 0),
+        vec3(0, 0, 1)
+    )
+
+    programs.shadow.lightProjection = perspective(160, 1, 0.1, 100.0)
+
+    let textureMatrix = mat4()
+    textureMatrix = mult(textureMatrix, translate(0.5, 0.5, 0.5))
+    textureMatrix = mult(textureMatrix, scalem(0.5, 0.5, 0.5))
+    textureMatrix = mult(textureMatrix, programs.shadow.lightProjection)
+    textureMatrix = mult(textureMatrix, programs.shadow.lightView)
+
+    programs.main.shadowMatrix = textureMatrix
+
+    addUniformsShadow()
+
+    console.log('Shadows setup')
+}
+
 function addAttributesMain() {
     let vPosition = gl.getAttribLocation(programs.main, 'vPosition')
     let vNormal = gl.getAttribLocation(programs.main, 'vNormal')
@@ -453,6 +537,13 @@ function addAttributesMain() {
         diffuseColor: diffuseColor,
         specularColor: specularColor,
         ambientColor: ambientColor,
+    }
+}
+
+function addAttributesShadow() {
+    let vPosition = gl.getAttribLocation(programs.shadow, 'vPosition')
+    programs.shadow.attributes = {
+        vPosition: vPosition,
     }
 }
 
@@ -478,6 +569,8 @@ function addUniformsMain() {
     let modelTexture = gl.getUniformLocation(programs.main, 'modelTexture')
     let lightOn = gl.getUniformLocation(programs.main, 'lightOn')
     let lightPosition = gl.getUniformLocation(programs.main, 'lightPosition')
+    let shadowMatrix = gl.getUniformLocation(programs.main, 'shadowMatrix')
+    let shadowEnabled = gl.getUniformLocation(programs.main, 'shadowEnabled')
 
     programs.main.uniforms.cameraView = cameraView
     programs.main.uniforms.cameraProjection = cameraProjection
@@ -488,6 +581,30 @@ function addUniformsMain() {
     programs.main.uniforms.modelTexture = modelTexture
     programs.main.uniforms.lightOn = lightOn
     programs.main.uniforms.lightPosition = lightPosition
+    programs.main.uniforms.shadowMatrix = shadowMatrix
+    programs.main.uniforms.shadowEnabled = shadowEnabled
+}
+
+function addUniformsShadow() {
+    let lightView = gl.getUniformLocation(programs.shadow, 'lightView')
+    let lightProjection = gl.getUniformLocation(
+        programs.shadow,
+        'lightProjection'
+    )
+    let modelTranslation = gl.getUniformLocation(
+        programs.shadow,
+        'modelTranslation'
+    )
+    let modelRotation = gl.getUniformLocation(programs.shadow, 'modelRotation')
+    let modelScale = gl.getUniformLocation(programs.shadow, 'modelScale')
+
+    programs.shadow.uniforms = {
+        lightView: lightView,
+        lightProjection: lightProjection,
+        modelTranslation: modelTranslation,
+        modelRotation: modelRotation,
+        modelScale: modelScale,
+    }
 }
 
 function drawModel(program, model) {
@@ -595,6 +712,12 @@ function drawModel(program, model) {
     )
 
     gl.uniformMatrix4fv(
+        programs.main.uniforms.shadowMatrix,
+        false,
+        flatten(programs.main.shadowMatrix)
+    )
+
+    gl.uniformMatrix4fv(
         program.uniforms.modelTranslation,
         false,
         flatten(model.getTranslation())
@@ -611,15 +734,22 @@ function drawModel(program, model) {
     )
 
     gl.uniform1i(program.uniforms.useTexture, model.textured ? 1 : 0)
+
+    gl.uniform1i(program.uniforms.lightOn, mainVariables.lightOn ? 1 : 0)
+
     gl.uniform1i(
-        gl.getUniformLocation(program, 'lightOn'),
-        mainVariables.lightOn ? 1 : 0
+        program.uniforms.shadowEnabled,
+        mainVariables.shadowEnabled ? 1 : 0
     )
 
     gl.uniform4fv(
         program.uniforms.lightPosition,
         flatten(lights.mainLight.position)
     )
+
+    gl.activeTexture(gl.TEXTURE0)
+    gl.bindTexture(gl.TEXTURE_CUBE_MAP, programs.shadow.shadowTexture)
+    gl.uniform1i(gl.getUniformLocation(program, 'shadowTexture'), 0)
 
     gl.activeTexture(gl.TEXTURE1)
     gl.bindTexture(gl.TEXTURE_2D, model.texture)
@@ -632,18 +762,112 @@ function drawModel(program, model) {
     gl.bindTexture(gl.TEXTURE_2D, null)
 }
 
+function drawShadow(program, model) {
+    gl.useProgram(programs.shadow)
+
+    let buffers = model.buffers
+
+    if (!buffers) {
+        return
+    }
+
+    let vPosition = program.attributes['vPosition']
+    if (vPosition < 0) {
+        console.log('Failed to get vPosition attribute')
+        return
+    } else {
+        gl.bindBuffer(gl.ARRAY_BUFFER, buffers.vPosShadow)
+        gl.vertexAttribPointer(vPosition, 4, gl.FLOAT, false, 0, 0)
+        gl.enableVertexAttribArray(vPosition)
+    }
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, programs.shadow.framebuffer)
+
+    gl.uniformMatrix4fv(
+        program.uniforms.lightView,
+        false,
+        flatten(programs.shadow.lightView)
+    )
+
+    gl.uniformMatrix4fv(
+        program.uniforms.lightProjection,
+        false,
+        flatten(programs.shadow.lightProjection)
+    )
+
+    gl.uniformMatrix4fv(
+        program.uniforms.modelTranslation,
+        false,
+        flatten(model.getTranslation())
+    )
+    gl.uniformMatrix4fv(
+        program.uniforms.modelRotation,
+        false,
+        flatten(model.getRotation())
+    )
+    gl.uniformMatrix4fv(
+        program.uniforms.modelScale,
+        false,
+        flatten(model.getScale())
+    )
+
+    gl.drawArrays(gl.TRIANGLES, 0, model.getVertices().length / 4)
+
+    gl.disableVertexAttribArray(vPosition)
+}
+
 function render() {
     gl.useProgram(programs.main)
     gl.clearColor(0.0, 0.0, 0.0, 1.0)
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
-    for (let model in models) {
-        drawModel(programs.main, programs.main.models[model])
-        for (let childModel in models[model].embeddedObjects) {
-            drawModel(
-                programs.main,
-                programs.main.models[model].embeddedObjects[childModel]
-            )
+    gl.useProgram(programs.shadow)
+    gl.enable(gl.CULL_FACE)
+    gl.cullFace(gl.FRONT)
+    gl.bindFramebuffer(gl.FRAMEBUFFER, programs.shadow.framebuffer)
+    let status = gl.checkFramebufferStatus(gl.FRAMEBUFFER)
+    if (status !== gl.FRAMEBUFFER_COMPLETE) {
+        console.log('Framebuffer is not complete')
+    }
+    gl.viewport(0, 0, mainVariables.shadowMapSize, mainVariables.shadowMapSize)
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
+
+    gl.uniformMatrix4fv(
+        gl.getUniformLocation(programs.shadow, 'lightView'),
+        false,
+        flatten(programs.shadow.lightView)
+    )
+
+    gl.uniformMatrix4fv(
+        gl.getUniformLocation(programs.shadow, 'lightProjection'),
+        false,
+        flatten(programs.shadow.lightProjection)
+    )
+
+    for (let [name, model] of Object.entries(models)) {
+        if (model.name === 'street') {
+            continue
+        }
+        drawShadow(programs.shadow, model)
+        for (let [childName, childModel] of Object.entries(
+            model.embeddedObjects
+        )) {
+            drawShadow(programs.shadow, childModel)
+        }
+    }
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+    gl.viewport(0, 0, gl.canvas.width, gl.canvas.height)
+    gl.useProgram(programs.main)
+    gl.disable(gl.CULL_FACE)
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
+
+    for (let [name, model] of Object.entries(models)) {
+        drawModel(programs.main, model)
+        for (let [childName, childModel] of Object.entries(
+            model.embeddedObjects
+        )) {
+            drawModel(programs.main, childModel)
         }
     }
 
@@ -672,7 +896,9 @@ function main() {
                 setupScene()
                 createEventListeners()
                 addAttributesMain()
+                addAttributesShadow()
                 addUniformsMain()
+                setupShadows()
                 render()
             })
         })
