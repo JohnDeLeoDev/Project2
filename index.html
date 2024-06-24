@@ -27,6 +27,7 @@
             varying vec4 vPositionInLightSpace;
             varying vec4 fNormal;
             varying vec4 fPosition;
+            varying vec3 uCameraPosition;
 
             varying vec4 vProjectedTexCoords;
 
@@ -43,6 +44,9 @@
                 fPosition = modelTranslation * modelRotation * modelScale * vPosition;
 
                 vProjectedTexCoords = shadowMatrix * fPosition;
+
+                // get x,y, z coordinates of the camera position
+                uCameraPosition = vec3(cameraView[3][0], cameraView[3][1], cameraView[3][2]);
 
                 // position of the vertex in the camera space
                 gl_Position = cameraProjection * cameraView * fPosition;
@@ -66,20 +70,29 @@
             varying vec4 fPosition;
             varying highp vec2 fTexCoord;
             varying vec4 vProjectedTexCoords;
+            varying vec3 uCameraPosition;
+
+            uniform float materialShininess; //
+
 
             uniform vec4 lightPosition; //
             uniform vec4 lightAmbient; //
             uniform vec4 lightDiffuse; //
             uniform vec4 lightSpecular; //
+            uniform vec3 cameraPosition; //
+
 
             uniform bool lightOn; //
-            uniform bool shadowEnable; //
+            uniform bool shadowEnabled; //
             uniform bool additionalBias; //
             uniform bool hasNoShadow; //
+            uniform bool isLamp;
+            uniform bool envReflEnabled;
+            uniform bool refractEnabled;
 
             void main(void) {
 
-                float bias = 0.00;
+                float bias = 0.00005;
 
                 vec3 shadowCoord = vProjectedTexCoords.xyz / vProjectedTexCoords.w;
                 // find current fragment depth
@@ -101,19 +114,59 @@
                 vec4 lightDir = normalize(lightPosition - fPosition);
                 vec4 reflectDir = reflect(-lightDir, normal);
                 vec4 viewDir = normalize(-fPosition);
-                float spec = pow(max(dot(viewDir, reflectDir), 0.0), 25.0);
+                float spec = pow(max(dot(viewDir, reflectDir), 0.0), materialShininess);
 
                 vec4 ambient = lightAmbient * fAmbientColor;
                 vec4 diffuse = lightDiffuse * fDiffuseColor * max(dot(normal, lightDir), 0.0);
                 vec4 specular = lightSpecular * fSpecularColor * spec;
+
+                vec3 eyeToSurface = normalize(cameraPosition - fPosition.xyz);
+                vec3 reflectionDirection = reflect(eyeToSurface, normal.xyz);
+
+                vec4 environmentColor = textureCube(skyboxTexture, reflectionDirection);
+
+                float dimmingFactor = 0.5;
+                
+                vec4 finalEnvironmentColor = vec4(environmentColor.r * dimmingFactor, environmentColor.g * dimmingFactor, environmentColor.b * dimmingFactor, 1.0);
+
+                vec3 refractDir = refract(eyeToSurface, normal.xyz, 0.5);
+                vec4 refractColor = textureCube(skyboxTexture, refractDir);
+                refractColor = mix(refractColor, vec4(1.0,1.0,1.0,0.1), 0.1);
+
+
+
+                if (!envReflEnabled) {
+                    finalEnvironmentColor = vec4(0.0, 0.0, 0.0, 0.1);
+                }
+
+                if (refractEnabled) {
+                    finalEnvironmentColor = refractColor;
+                    diffuse = vec4(0.0, 0.0, 0.0, 0.0);
+                    specular = vec4(0.0, 0.0, 0.0, 0.0);
+                    ambient = vec4(0.0, 0.0, 0.0, 0.0);
+                    texColor = vec4(0.0, 0.0, 0.0, 0.0);
+                    
+                }
 
                 if (!lightOn) {
                     diffuse = vec4(0.0, 0.0, 0.0, 1.0);
                     specular = vec4(0.0, 0.0, 0.0, 1.0);
                 }
 
-                gl_FragColor = ((ambient + diffuse + specular) * texColor) * shadowColorVec;
+                if (isLamp && lightOn) {
+                    if (fDepth < 0.4) {
+                        ambient = ambient + vec4(0.1, 0.1, 0.0, 0.05);
+                        diffuse = diffuse + vec4(0.0, 0.0, 0.0, 0.05);
+                        specular = specular + vec4(0.2, 0.2, 0.0, 0.05);
+                    }
+                }
 
+                if (!shadowEnabled) {
+                    shadowColorVec = vec4(1.0, 1.0, 1.0, 1.0);
+                }
+
+                gl_FragColor = (ambient + diffuse + specular) * texColor * shadowColorVec + finalEnvironmentColor;
+                
             }
         </script>
 
@@ -226,7 +279,7 @@
                             <input
                                 type="range"
                                 id="ambientLight"
-                                value="0.2"
+                                value="0.0"
                                 min="0.0"
                                 max="1.0"
                                 step="0.1"
@@ -239,7 +292,7 @@
                             <input
                                 type="range"
                                 id="diffuseLight"
-                                value="0.8"
+                                value="0.0"
                                 min="0.0"
                                 max="1.0"
                                 step="0.1"
@@ -252,7 +305,7 @@
                             <input
                                 type="range"
                                 id="specularLight"
-                                value="0.5"
+                                value="0.0"
                                 min="0.0"
                                 max="1.0"
                                 step="0.1"
@@ -264,10 +317,10 @@
                         <td>
                             <input
                                 type="range"
-                                id="shininess"
-                                value="25.0"
+                                id="materialShininess"
+                                value="0.0"
                                 min="0.0"
-                                max="100.0"
+                                max="90.0"
                                 step="1.0"
                             />
                         </td>
@@ -295,36 +348,50 @@
                         <td>Car Rotation</td>
                         <td id="carRotation">0.0</td>
                     </tr>
-                    
+
                     </tr>
                     <tr>
                         <td>Lighting</td>
                         <td>
-                            <input type="button" id="lightOn" value="On" />
+                            <button id="lightOn" value="false">Off</button>
                         </td>
                     </tr>
                     <tr>
                         <td>Shadow</td>
                         <td>
-                            <input
-                                type="checkbox"
-                                id="shadowEnable"
-                                checked="checked"
-                            />
+                            <button id="shadowEnable" value="false">Off</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Car Environment Reflections</td>
+                        <td>
+                            <button id="envReflEnable" value="false">Off</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Bunny Environment Refractions</td>
+                        <td>
+                            <button id="refractEnable" value="false">Off</button>
                         </td>
                     </tr>
                     <tr>
                         <td>Animation</td>
                         <td>
-                            <input type="button" id="animate" value="Off" />
+                            <button id="animate" value="false">Off</button>
                         </td>
                     </tr>
                     <tr>
-                        <td>Car Motion</td>
+                        <td>Camera Orbiting</td>
                         <td>
-                            <input type="button" id="carMotion" value="Off" />
+                            <button id="cameraOrbit" value="false">Off</button>
                         </td>
                     </tr>
+                    <tr>
+                        <td>Camera Following</td>
+                        <td>
+                            <button id="cameraFollow" value="false">Off</button>
+                        </td>
+
                 </table>
             </div>
         </div>

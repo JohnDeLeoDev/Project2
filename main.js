@@ -39,6 +39,9 @@ let mainVariables = {
     carPathVectors: [],
     inputs: {},
     displays: {},
+    materialShininess: 32,
+    envReflEnabled: true,
+    refractEnabled: false,
 }
 /***************************************************************************************/
 
@@ -237,15 +240,16 @@ makePathVectors()
 /***************************************************************************************/
 // handles camera placement when camera movement is enabled
 /***************************************************************************************/
-function orbitingCamera(t) {
+function orbitingCamera() {
     gl.useProgram(programs.main)
     let rate = 0.025
     let radius = 10
-    let angle = rate * t
+    let angle = rate * mainVariables.cameraTime
     let yAngle = 4.0 * angle
     let x = radius * Math.sin(angle)
     let y = 4.0 + 1.0 * Math.sin(yAngle)
     let z = radius * Math.cos(angle)
+    cameras.mainCamera.setFOV(45)
     cameras.mainCamera.moveTo(vec3(x, y, z))
     cameras.mainCamera.lookAt(vec3(0.0, 0.0, 0.0))
 
@@ -256,12 +260,47 @@ function orbitingCamera(t) {
 /***************************************************************************************/
 
 /***************************************************************************************/
-// moves car along smoothCarPath pointed at carPathVectors
+// handles camera placement when camera following is enabled - camera follows car fromcar's position
 /***************************************************************************************/
-function moveCar(t) {
+function followCamera() {
+    gl.useProgram(programs.main)
+
+    // find position on car path
     let rate = 0.05
     let speed = 0.5
-    let angle = rate * t
+    let angle = rate * mainVariables.carTime
+    let x = speed * Math.sin(angle)
+    let z = speed * Math.cos(angle)
+    let car = models.car
+    let carPathIndex = Math.floor(
+        (angle * 100) % mainVariables.smoothCarPath.length
+    )
+    let carPathVector = mainVariables.carPathVectors[carPathIndex]
+    let carPathPoint = mainVariables.smoothCarPath[carPathIndex]
+    let carRotation = rotateY(
+        90 - (Math.atan2(carPathVector[2], carPathVector[0]) * 180) / Math.PI
+    )
+
+    cameras.mainCamera.moveTo(vec3(carPathPoint[0], 0.75, carPathPoint[2]))
+    cameras.mainCamera.setFOV(90)
+
+    // make camera look forward from the car
+    cameras.mainCamera.lookAt(
+        vec3(
+            carPathPoint[0] + 5 * carPathVector[0],
+            0,
+            carPathPoint[2] + 5 * carPathVector[2]
+        )
+    )
+}
+
+/***************************************************************************************/
+// moves car along smoothCarPath pointed at carPathVectors
+/***************************************************************************************/
+function moveCar() {
+    let rate = 0.05
+    let speed = 0.5
+    let angle = rate * mainVariables.carTime
     let x = speed * Math.sin(angle)
     let z = speed * Math.cos(angle)
     let car = models.car
@@ -295,10 +334,10 @@ function createEventListeners() {
     window.addEventListener('keydown', function (event) {
         if (event.key === 'l') {
             mainVariables.lightOn = !mainVariables.lightOn
-            gl.uniform1i(
-                gl.getUniformLocation(programs.main, 'lightOn'),
-                mainVariables.lightOn ? 1 : 0
-            )
+            if (!mainVariables.lightOn) {
+                mainVariables.shadowEnabled = false
+            }
+
             console.log(
                 'Light is now ' + (mainVariables.lightOn ? 'on' : 'off')
             )
@@ -330,12 +369,117 @@ function createEventListeners() {
             )
         }
         if (event.key === 's') {
-            mainVariables.shadowEnabled = !mainVariables.shadowEnabled
+            if (mainVariables.lightOn) {
+                mainVariables.shadowEnabled = !mainVariables.shadowEnabled
+            }
             console.log(
                 'Shadow is now ' +
                     (mainVariables.shadowEnabled ? 'enabled' : 'disabled')
             )
         }
+        if (event.key === 'r') {
+            mainVariables.envReflEnabled = !mainVariables.envReflEnabled
+            console.log(
+                'Environment Reflection is now ' +
+                    (mainVariables.envReflEnabled ? 'enabled' : 'disabled')
+            )
+        }
+        if (event.key === 'f') {
+            mainVariables.refractEnabled = !mainVariables.refractEnabled
+            console.log(
+                'Refraction is now ' +
+                    (mainVariables.refractEnabled ? 'enabled' : 'disabled')
+            )
+        }
+    })
+
+    mainVariables.inputs.lightOn.addEventListener('click', function () {
+        mainVariables.lightOn = !mainVariables.lightOn
+        mainVariables.inputs.lightOn.textContent = mainVariables.lightOn
+            ? 'On'
+            : 'Off'
+        mainVariables.inputs.lightOn.style.backgroundColor =
+            mainVariables.lightOn ? 'green' : 'red'
+
+        if (!mainVariables.lightOn) {
+            mainVariables.shadowEnabled = false
+            mainVariables.inputs.shadowEnabled.textContent = 'Off'
+            mainVariables.inputs.shadowEnabled.style.backgroundColor = 'red'
+        }
+    })
+
+    mainVariables.inputs.shadowEnabled.addEventListener('click', function () {
+        if (mainVariables.lightOn) {
+            mainVariables.shadowEnabled = !mainVariables.shadowEnabled
+            mainVariables.inputs.shadowEnabled.textContent =
+                mainVariables.shadowEnabled ? 'On' : 'Off'
+            mainVariables.inputs.shadowEnabled.style.backgroundColor =
+                mainVariables.shadowEnabled ? 'green' : 'red'
+        }
+    })
+
+    mainVariables.inputs.cameraOrbit.addEventListener('click', function () {
+        mainVariables.cameraMoving = !mainVariables.cameraMoving
+        mainVariables.inputs.cameraOrbit.textContent =
+            mainVariables.cameraMoving ? 'On' : 'Off'
+        mainVariables.inputs.cameraOrbit.style.backgroundColor =
+            mainVariables.cameraMoving ? 'green' : 'red'
+    })
+
+    mainVariables.inputs.animate.addEventListener('click', function () {
+        mainVariables.carMoving = !mainVariables.carMoving
+        mainVariables.inputs.animate.textContent = mainVariables.carMoving
+            ? 'On'
+            : 'Off'
+        mainVariables.inputs.animate.style.backgroundColor =
+            mainVariables.carMoving ? 'green' : 'red'
+    })
+
+    mainVariables.inputs.cameraFollow.addEventListener('click', function () {
+        mainVariables.cameraFollowing = !mainVariables.cameraFollowing
+        mainVariables.inputs.cameraFollow.textContent =
+            mainVariables.cameraFollowing ? 'On' : 'Off'
+        mainVariables.inputs.cameraFollow.style.backgroundColor =
+            mainVariables.cameraFollowing ? 'green' : 'red'
+    })
+
+    mainVariables.inputs.diffuseLight.addEventListener('input', function () {
+        let value = mainVariables.inputs.diffuseLight.value
+        lights.mainLight.diffuse = vec4(value, value, value, 1.0)
+    })
+
+    mainVariables.inputs.ambientLight.addEventListener('input', function () {
+        let value = mainVariables.inputs.ambientLight.value
+        lights.mainLight.ambient = vec4(value, value, value, 1.0)
+    })
+
+    mainVariables.inputs.specularLight.addEventListener('input', function () {
+        let value = mainVariables.inputs.specularLight.value
+        lights.mainLight.specular = vec4(value, value, value, 1.0)
+    })
+
+    mainVariables.inputs.materialShininess.addEventListener(
+        'input',
+        function () {
+            let value = 100 - mainVariables.inputs.materialShininess.value
+            mainVariables.materialShininess = value
+        }
+    )
+
+    mainVariables.inputs.envReflEnabled.addEventListener('click', function () {
+        mainVariables.envReflEnabled = !mainVariables.envReflEnabled
+        mainVariables.inputs.envReflEnabled.textContent =
+            mainVariables.envReflEnabled ? 'On' : 'Off'
+        mainVariables.inputs.envReflEnabled.style.backgroundColor =
+            mainVariables.envReflEnabled ? 'green' : 'red'
+    })
+
+    mainVariables.inputs.refractEnabled.addEventListener('click', function () {
+        mainVariables.refractEnabled = !mainVariables.refractEnabled
+        mainVariables.inputs.refractEnabled.textContent =
+            mainVariables.refractEnabled ? 'On' : 'Off'
+        mainVariables.inputs.refractEnabled.style.backgroundColor =
+            mainVariables.refractEnabled ? 'green' : 'red'
     })
 }
 /***************************************************************************************/
@@ -377,13 +521,49 @@ function initWebGL() {
 // Connect HTML elements to JS
 /***************************************************************************************/
 function connectHTML() {
+    mainVariables.inputs.diffuseLight = document.getElementById('diffuseLight')
+
+    mainVariables.inputs.ambientLight = document.getElementById('ambientLight')
+
+    mainVariables.inputs.specularLight =
+        document.getElementById('specularLight')
+    // light on button = 'lightOn'
     mainVariables.inputs.lightOn = document.getElementById('lightOn')
-    mainVariables.inputs.shadowEnabled =
-        document.getElementById('shadowEnabled')
-    mainVariables.inputs.cameraMoving = document.getElementById('cameraMoving')
-    mainVariables.inputs.carMoving = document.getElementById('carMoving')
-    mainVariables.inputs.cameraFollowing =
-        document.getElementById('cameraFollowing')
+    mainVariables.inputs.lightOn.textContent = 'On'
+    mainVariables.inputs.lightOn.style.backgroundColor = 'green'
+    mainVariables.inputs.lightOn.style.color = 'white'
+
+    mainVariables.inputs.shadowEnabled = document.getElementById('shadowEnable')
+    mainVariables.inputs.shadowEnabled.textContent = 'On'
+    mainVariables.inputs.shadowEnabled.style.backgroundColor = 'green'
+    mainVariables.inputs.shadowEnabled.style.color = 'white'
+
+    mainVariables.inputs.cameraOrbit = document.getElementById('cameraOrbit')
+    mainVariables.inputs.cameraOrbit.textContent = 'Off'
+    mainVariables.inputs.cameraOrbit.style.backgroundColor = 'red'
+    mainVariables.inputs.cameraOrbit.style.color = 'white'
+
+    mainVariables.inputs.animate = document.getElementById('animate')
+    mainVariables.inputs.animate.textContent = 'Off'
+    mainVariables.inputs.animate.style.backgroundColor = 'red'
+    mainVariables.inputs.animate.style.color = 'white'
+
+    mainVariables.inputs.cameraFollow = document.getElementById('cameraFollow')
+    mainVariables.inputs.cameraFollow.textContent = 'Off'
+    mainVariables.inputs.cameraFollow.style.backgroundColor = 'red'
+    mainVariables.inputs.cameraFollow.style.color = 'white'
+
+    mainVariables.inputs.envReflEnabled =
+        document.getElementById('envReflEnable')
+    mainVariables.inputs.envReflEnabled.textContent = 'On'
+    mainVariables.inputs.envReflEnabled.style.backgroundColor = 'green'
+    mainVariables.inputs.envReflEnabled.style.color = 'white'
+
+    mainVariables.inputs.refractEnabled =
+        document.getElementById('refractEnable')
+    mainVariables.inputs.refractEnabled.textContent = 'Off'
+    mainVariables.inputs.refractEnabled.style.backgroundColor = 'red'
+    mainVariables.inputs.refractEnabled.style.color = 'white'
 
     mainVariables.displays.cameraPosition =
         document.getElementById('cameraPosition')
@@ -393,10 +573,90 @@ function connectHTML() {
     mainVariables.displays.carRotation = document.getElementById('carRotation')
     mainVariables.displays.lightPosition =
         document.getElementById('lightPosition')
+    mainVariables.inputs.materialShininess =
+        document.getElementById('materialShininess')
+    mainVariables.inputs.materialShininess.value =
+        100 - mainVariables.materialShininess
 }
 /***************************************************************************************/
 // end of connecting HTML elements
 /***************************************************************************************/
+
+/***************************************************************************************/
+// Updates display elements
+/***************************************************************************************/
+function updateDisplays() {
+    let cameraX = cameras.mainCamera.eye[0].toFixed(2)
+    let cameraY = cameras.mainCamera.eye[1].toFixed(2)
+    let cameraZ = cameras.mainCamera.eye[2].toFixed(2)
+    mainVariables.displays.cameraPosition.textContent = `x: ${cameraX}, y: ${cameraY}, z: ${cameraZ}`
+
+    let lookAtX = cameras.mainCamera.at[0].toFixed(2)
+    let lookAtY = cameras.mainCamera.at[1].toFixed(2)
+    let lookAtZ = cameras.mainCamera.at[2].toFixed(2)
+    mainVariables.displays.cameraLookAt.textContent = `x: ${lookAtX}, y: ${lookAtY}, z: ${lookAtZ}`
+
+    let carPosition = models.car.getPosition()
+    let carX = carPosition[0].toFixed(2)
+    let carY = carPosition[1].toFixed(2)
+    let carZ = carPosition[2].toFixed(2)
+    mainVariables.displays.carPosition.textContent = `x: ${carX}, y: ${carY}, z: ${carZ}`
+
+    let carRotation = models.car.getRotationAngle()
+    let rotationY = carRotation[1].toFixed(2)
+    mainVariables.displays.carRotation.textContent = `y: ${rotationY}`
+
+    let lightPosition = lights.mainLight.position
+    let lightX = lightPosition[0].toFixed(2)
+    let lightY = lightPosition[1].toFixed(2)
+    let lightZ = lightPosition[2].toFixed(2)
+    mainVariables.displays.lightPosition.textContent = `x: ${lightX}, y: ${lightY}, z: ${lightZ}`
+
+    mainVariables.inputs.lightOn.textContent = mainVariables.lightOn
+        ? 'On'
+        : 'Off'
+    mainVariables.inputs.lightOn.style.backgroundColor = mainVariables.lightOn
+        ? 'green'
+        : 'red'
+
+    mainVariables.inputs.shadowEnabled.textContent = mainVariables.shadowEnabled
+        ? 'On'
+        : 'Off'
+    mainVariables.inputs.shadowEnabled.style.backgroundColor =
+        mainVariables.shadowEnabled ? 'green' : 'red'
+
+    mainVariables.inputs.cameraOrbit.textContent = mainVariables.cameraMoving
+        ? 'On'
+        : 'Off'
+    mainVariables.inputs.cameraOrbit.style.backgroundColor =
+        mainVariables.cameraMoving ? 'green' : 'red'
+
+    mainVariables.inputs.animate.textContent = mainVariables.carMoving
+        ? 'On'
+        : 'Off'
+    mainVariables.inputs.animate.style.backgroundColor = mainVariables.carMoving
+        ? 'green'
+        : 'red'
+
+    mainVariables.inputs.cameraFollow.textContent =
+        mainVariables.cameraFollowing ? 'On' : 'Off'
+    mainVariables.inputs.cameraFollow.style.backgroundColor =
+        mainVariables.cameraFollowing ? 'green' : 'red'
+
+    mainVariables.inputs.envReflEnabled.textContent =
+        mainVariables.envReflEnabled ? 'On' : 'Off'
+    mainVariables.inputs.envReflEnabled.style.backgroundColor =
+        mainVariables.envReflEnabled ? 'green' : 'red'
+
+    mainVariables.inputs.refractEnabled.textContent =
+        mainVariables.refractEnabled ? 'On' : 'Off'
+    mainVariables.inputs.refractEnabled.style.backgroundColor =
+        mainVariables.refractEnabled ? 'green' : 'red'
+
+    mainVariables.inputs.diffuseLight.value = lights.mainLight.diffuse[0]
+    mainVariables.inputs.ambientLight.value = lights.mainLight.ambient[0]
+    mainVariables.inputs.specularLight.value = lights.mainLight.specular[0]
+}
 
 /***************************************************************************************/
 // Initialize models
@@ -459,10 +719,8 @@ async function initModels() {
     models.car = car
     models.street = street
     models.car.embeddedObjects.bunny = bunny
-    models.car.embeddedObjects.bunny.transToParent = translate(0, 0.4, 0.75)
-    models.car.embeddedObjects.bunny.rotateTransToParent(rotateY(-90))
-    models.car.embeddedObjects.bunny.currentTransToParent =
-        models.car.embeddedObjects.bunny.transToParent
+    models.car.embeddedObjects.bunny.transToParent = translate(0, 0.5, 1)
+    models.car.embeddedObjects.bunny.type = 'child'
 
     for (let model in models) {
         for (let childModel in models[model].embeddedObjects) {
@@ -868,7 +1126,7 @@ function setupScene() {
         )
     )
     models.car.setRotation(rotateY(0))
-    models.car.setScale(scalem(0.5, 0.5, 0.5))
+    models.car.setScale(scalem(0.75, 0.75, 0.75))
     models.stopSign.setTranslation(translate(4.5, 0, 0))
     models.stopSign.setRotation(rotateY(-90))
 }
@@ -884,7 +1142,7 @@ function setupShadows() {
 
     // look at [posX, posY, posZ]
     programs.shadow.lightView = lookAt(
-        vec3(0, findTopOfLamp() - 1.0, 0),
+        vec3(0, findTopOfLamp() - 0.2, 0),
         vec3(0, 0, 0),
         vec3(0, 0, 1)
     )
@@ -979,6 +1237,15 @@ function addUniformsMain() {
     let shadowEnabled = gl.getUniformLocation(programs.main, 'shadowEnabled')
     let additionalBias = gl.getUniformLocation(programs.main, 'additionalBias')
     let hasNoShadow = gl.getUniformLocation(programs.main, 'hasNoShadow')
+    let materialShininess = gl.getUniformLocation(
+        programs.main,
+        'materialShininess'
+    )
+    let isLamp = gl.getUniformLocation(programs.main, 'isLamp')
+    let cameraPosition = gl.getUniformLocation(programs.main, 'cameraPosition')
+    let skyboxTexture = gl.getUniformLocation(programs.main, 'skyboxTexture')
+    let envReflEnabled = gl.getUniformLocation(programs.main, 'envReflEnabled')
+    let refractEnabled = gl.getUniformLocation(programs.main, 'refractEnabled')
 
     gl.uniform1f(shadowEnabled, 1)
 
@@ -995,6 +1262,12 @@ function addUniformsMain() {
     programs.main.uniforms.shadowEnabled = shadowEnabled
     programs.main.uniforms.additionalBias = additionalBias
     programs.main.uniforms.hasNoShadow = hasNoShadow
+    programs.main.uniforms.materialShininess = materialShininess
+    programs.main.uniforms.isLamp = isLamp
+    programs.main.uniforms.cameraPosition = cameraPosition
+    programs.main.uniforms.skyboxTexture = skyboxTexture
+    programs.main.uniforms.envReflEnabled = envReflEnabled
+    programs.main.uniforms.refractEnabled = refractEnabled
 }
 /***************************************************************************************/
 // end of adding uniforms to main program
@@ -1167,10 +1440,17 @@ function drawModel(program, model) {
     }
 
     if (model.name === 'lamp') {
-        gl.uniform1i(gl.getUniformLocation(program, 'hasNoShadow'), 1)
+        gl.uniform1i(programs.main.uniforms.hasNoShadow, 1)
+        gl.uniform1f(programs.main.uniforms.isLamp, 1)
     } else {
-        gl.uniform1i(gl.getUniformLocation(program, 'hasNoShadow'), 0)
+        gl.uniform1i(programs.main.uniforms.hasNoShadow, 0)
+        gl.uniform1f(programs.main.uniforms.isLamp, 0)
     }
+
+    gl.uniform1f(
+        program.uniforms.envReflEnabled,
+        mainVariables.envReflEnabled ? 1 : 0
+    )
 
     gl.uniformMatrix4fv(
         program.uniforms.cameraView,
@@ -1206,19 +1486,45 @@ function drawModel(program, model) {
         flatten(model.getScale())
     )
 
+    if (model.name === 'car') {
+        gl.uniform1f(
+            programs.main.uniforms.envReflEnabled,
+            mainVariables.envReflEnabled ? 1 : 0
+        )
+    } else {
+        gl.uniform1f(programs.main.uniforms.envReflEnabled, 0)
+    }
+
+    if (model.name === 'bunny') {
+        gl.uniform1f(
+            programs.main.uniforms.refractEnabled,
+            mainVariables.refractEnabled ? 1 : 0
+        )
+    } else {
+        gl.uniform1f(programs.main.uniforms.refractEnabled, 0)
+    }
+
     gl.uniform1i(program.uniforms.useTexture, model.textured ? 1 : 0)
 
     gl.uniform1i(program.uniforms.lightOn, mainVariables.lightOn ? 1 : 0)
 
-    if (mainVariables.shadowEnabled) {
-        gl.uniform1i(program.uniforms.shadowEnabled, 1)
-    } else {
-        gl.uniform1i(program.uniforms.shadowEnabled, 0)
-    }
+    gl.uniform1i(
+        program.uniforms.shadowEnabled,
+        mainVariables.shadowEnabled ? 1 : 0
+    )
 
-    gl.uniform4fv(
-        program.uniforms.lightPosition,
-        flatten(lights.mainLight.position)
+    let eye = cameras.mainCamera.eye
+    let vectorToCameraEye = vec3(eye[0], eye[1], eye[2])
+    gl.uniform3fv(program.uniforms.cameraPosition, flatten(vectorToCameraEye))
+
+    gl.uniform4fv(program.uniforms.lightPosition, lights.mainLight.position)
+
+    gl.uniform4fv(program.uniforms.lightDiffuse, lights.mainLight.diffuse)
+    gl.uniform4fv(program.uniforms.lightAmbient, lights.mainLight.ambient)
+    gl.uniform4fv(program.uniforms.lightSpecular, lights.mainLight.specular)
+    gl.uniform1f(
+        program.uniforms.materialShininess,
+        mainVariables.materialShininess
     )
 
     gl.activeTexture(gl.TEXTURE0)
@@ -1228,6 +1534,10 @@ function drawModel(program, model) {
     gl.activeTexture(gl.TEXTURE1)
     gl.bindTexture(gl.TEXTURE_2D, model.texture)
     gl.uniform1i(program.uniforms.modelTexture, 1)
+
+    gl.activeTexture(gl.TEXTURE2)
+    gl.bindTexture(gl.TEXTURE_CUBE_MAP, programs.skybox.texture)
+    gl.uniform1i(program.uniforms.skyboxTexture, 2)
 
     gl.drawArrays(gl.TRIANGLES, 0, model.getVertices().length / 4)
 
@@ -1375,49 +1685,40 @@ function render() {
     /***************************************************************************************/
     // handles drawing to shadow map
     /***************************************************************************************/
-    if (mainVariables.shadowEnabled) {
-        gl.useProgram(programs.shadow)
+    gl.useProgram(programs.shadow)
 
-        gl.bindFramebuffer(gl.FRAMEBUFFER, programs.shadow.framebuffer)
+    gl.bindFramebuffer(gl.FRAMEBUFFER, programs.shadow.framebuffer)
 
-        let status = gl.checkFramebufferStatus(gl.FRAMEBUFFER)
-        if (status !== gl.FRAMEBUFFER_COMPLETE) {
-            console.log('Framebuffer is not complete')
-        }
-        gl.enable(gl.DEPTH_TEST)
-        gl.cullFace(gl.FRONT)
-        gl.enable(gl.CULL_FACE)
-        gl.viewport(
-            0,
-            0,
-            mainVariables.shadowMapSize,
-            mainVariables.shadowMapSize
-        )
-        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
-
-        for (let [name, model] of Object.entries(models)) {
-            if (model.name === 'lamp') {
-                continue
-            }
-            drawShadow(programs.shadow, model)
-            for (let [childName, childModel] of Object.entries(
-                model.embeddedObjects
-            )) {
-                drawShadow(programs.shadow, childModel)
-            }
-        }
-
-        gl.bindFramebuffer(gl.FRAMEBUFFER, null)
-        gl.viewport(0, 0, gl.canvas.width, gl.canvas.height)
-        gl.useProgram(programs.main)
-        gl.cullFace(gl.BACK)
-        gl.enable(gl.CULL_FACE)
-    } else {
-        gl.useProgram(programs.shadow)
-        gl.bindFramebuffer(gl.FRAMEBUFFER, programs.shadow.framebuffer)
-        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
-        gl.useProgram(programs.main)
+    let status = gl.checkFramebufferStatus(gl.FRAMEBUFFER)
+    if (status !== gl.FRAMEBUFFER_COMPLETE) {
+        console.log('Framebuffer is not complete')
     }
+    gl.enable(gl.DEPTH_TEST)
+    gl.cullFace(gl.FRONT)
+    gl.enable(gl.CULL_FACE)
+    gl.viewport(0, 0, mainVariables.shadowMapSize, mainVariables.shadowMapSize)
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
+
+    for (let [name, model] of Object.entries(models)) {
+        if (model.name === 'lamp') {
+            continue
+        }
+        drawShadow(programs.shadow, model)
+        for (let [childName, childModel] of Object.entries(
+            model.embeddedObjects
+        )) {
+            drawShadow(programs.shadow, childModel)
+        }
+    }
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+    gl.viewport(0, 0, gl.canvas.width, gl.canvas.height)
+    gl.useProgram(programs.main)
+    gl.cullFace(gl.BACK)
+    gl.enable(gl.CULL_FACE)
+
+    gl.useProgram(programs.main)
+
     /*****************************************************************************************/
     // handles rendering models in scene
     /*****************************************************************************************/
@@ -1438,14 +1739,19 @@ function render() {
     // checkers for change in state options
     /*****************************************************************************************/
     if (mainVariables.cameraMoving) {
-        orbitingCamera(mainVariables.cameraTime)
+        orbitingCamera()
+    }
+
+    if (mainVariables.cameraFollowing) {
+        followCamera()
     }
 
     if (mainVariables.carMoving) {
-        moveCar(mainVariables.carTime)
+        moveCar()
     }
     /*****************************************************************************************/
 
+    updateDisplays()
     requestAnimationFrame(render)
 }
 /***************************************************************************************/
@@ -1455,6 +1761,7 @@ function render() {
 /***************************************************************************************/
 function main() {
     initWebGL()
+    connectHTML()
     initModels().then(() => {
         initBuffers().then(() => {
             loadTextures().then(() => {
