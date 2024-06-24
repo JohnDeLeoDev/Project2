@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html>
+<html id="page">
     <head>
         <meta charset="UTF-8" />
-        <title>CS 4731 Final Project Part I</title>
+        <title>John's WebGL Night Scene</title>
 
         <script id="main-vshader" type="x-shader/x-vertex">
             attribute vec4 vPosition;  //
@@ -75,10 +75,11 @@
             uniform bool lightOn; //
             uniform bool shadowEnable; //
             uniform bool additionalBias; //
+            uniform bool hasNoShadow; //
 
             void main(void) {
 
-                float bias = 0.0;
+                float bias = 0.00;
 
                 vec3 shadowCoord = vProjectedTexCoords.xyz / vProjectedTexCoords.w;
                 // find current fragment depth
@@ -86,9 +87,13 @@
 
                 float shadowDepth = texture2D(shadowTexture, shadowCoord.xy).z;
 
-                float shadowColor = fDepth > shadowDepth + bias ? 0.2 : 0.0;
+                float shadowColor = fDepth > shadowDepth + bias ? 0.2 : 1.0;
 
-                vec4 shadowColorVec = vec4(shadowColor, shadowColor, shadowColor, 0.0);
+                vec4 shadowColorVec = vec4(shadowColor, shadowColor, shadowColor, 1.0);
+
+                if (hasNoShadow) {
+                    shadowColorVec = vec4(1.0, 1.0, 1.0, 1.0);
+                }
 
                 vec4 texColor = useTexture ? texture2D(modelTexture, fTexCoord) : vec4(1.0);
 
@@ -96,7 +101,7 @@
                 vec4 lightDir = normalize(lightPosition - fPosition);
                 vec4 reflectDir = reflect(-lightDir, normal);
                 vec4 viewDir = normalize(-fPosition);
-                float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32.0);
+                float spec = pow(max(dot(viewDir, reflectDir), 0.0), 25.0);
 
                 vec4 ambient = lightAmbient * fAmbientColor;
                 vec4 diffuse = lightDiffuse * fDiffuseColor * max(dot(normal, lightDir), 0.0);
@@ -107,7 +112,7 @@
                     specular = vec4(0.0, 0.0, 0.0, 1.0);
                 }
 
-                gl_FragColor = ((ambient + diffuse + specular) * texColor) - shadowColorVec;
+                gl_FragColor = ((ambient + diffuse + specular) * texColor) * shadowColorVec;
 
             }
         </script>
@@ -201,13 +206,127 @@
         <script type="text/javascript" src="lib/skybox.js"></script>
 
         <script type="text/javascript" src="main.js"></script>
+
+        <link rel="stylesheet" type="text/css" href="style.css" />
     </head>
 
     <body>
-        <h1 id="mode">CS 4731 Final Project</h1>
+        <h1 id="mode">John's WebGL Night Scene</h1>
 
-        <canvas id="webgl" class="box" width="800" height="800">
-            Please use a browser that supports the "canvas" tag.
-        </canvas>
+        <div id="displays">
+            <canvas id="webgl" class="box" width="800" height="800">
+                Please use a browser that supports the "canvas" tag.
+            </canvas>
+
+            <div id="information">
+                <table id="lighting">
+                    <tr>
+                        <td>Ambient Light</td>
+                        <td>
+                            <input
+                                type="range"
+                                id="ambientLight"
+                                value="0.2"
+                                min="0.0"
+                                max="1.0"
+                                step="0.1"
+                            />
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Diffuse Light</td>
+                        <td>
+                            <input
+                                type="range"
+                                id="diffuseLight"
+                                value="0.8"
+                                min="0.0"
+                                max="1.0"
+                                step="0.1"
+                            />
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Specular Light</td>
+                        <td>
+                            <input
+                                type="range"
+                                id="specularLight"
+                                value="0.5"
+                                min="0.0"
+                                max="1.0"
+                                step="0.1"
+                            />
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Material Shininess</td>
+                        <td>
+                            <input
+                                type="range"
+                                id="shininess"
+                                value="25.0"
+                                min="0.0"
+                                max="100.0"
+                                step="1.0"
+                            />
+                        </td>
+                    </tr>
+                </table>
+
+                <table id="status">
+                    <tr>
+                        <td>Camera Position</td>
+                        <td id="cameraPosition">0.0, 0.0, 0.0</td>
+                    </tr>
+                    <tr>
+                        <td>Camera Look At</td>
+                        <td id="cameraLookAt">0.0, 0.0, 0.0</td>
+                    </tr>
+                    <tr>
+                        <td>Light Position</td>
+                        <td id="lightPosition">0.0, 0.0, 0.0</td>
+                    </tr>
+                    <tr>
+                        <td>Car Position</td>
+                        <td id="carPosition">0.0, 0.0, 0.0</td>
+                    </tr>
+                    <tr>
+                        <td>Car Rotation</td>
+                        <td id="carRotation">0.0</td>
+                    </tr>
+                    
+                    </tr>
+                    <tr>
+                        <td>Lighting</td>
+                        <td>
+                            <input type="button" id="lightOn" value="On" />
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Shadow</td>
+                        <td>
+                            <input
+                                type="checkbox"
+                                id="shadowEnable"
+                                checked="checked"
+                            />
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Animation</td>
+                        <td>
+                            <input type="button" id="animate" value="Off" />
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Car Motion</td>
+                        <td>
+                            <input type="button" id="carMotion" value="Off" />
+                        </td>
+                    </tr>
+                </table>
+            </div>
+        </div>
     </body>
 </html>

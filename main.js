@@ -1,4 +1,16 @@
+// John DeLeo
+// WPI
+// CS543
+// Project 2
+/***************************************************************************************/
+// Project uses WebGL to create a scene with real time shadows, lighting, and textures
+// Shadows are created using shadow mapping and depth textures
+// Lighting is created using a point light source
+/***************************************************************************************/
+
+/***************************************************************************************/
 // Variables
+/***************************************************************************************/
 let canvas
 let gl
 let programs = {}
@@ -7,6 +19,9 @@ models.buffers
 let lights = {}
 let cameras = {}
 let textures = {}
+/***************************************************************************************/
+// Main variables object used in the project
+/***************************************************************************************/
 let mainVariables = {
     lightOn: true,
     shadowEnabled: true,
@@ -22,7 +37,11 @@ let mainVariables = {
     carPathPoints: [],
     smoothCarPath: [],
     carPathVectors: [],
+    inputs: {},
+    displays: {},
 }
+/***************************************************************************************/
+
 let carPathPoints = [
     // left edge
     vec3(-mainVariables.carBoundary, mainVariables.carYOffset, 0),
@@ -67,6 +86,9 @@ let carPathPoints = [
 ]
 mainVariables.carPathPoints = carPathPoints
 
+/***************************************************************************************/
+// makes path for car to follow - uses bezier curves
+/***************************************************************************************/
 function makePath() {
     let path = []
     let points = carPathPoints
@@ -189,7 +211,13 @@ function makePath() {
 }
 
 mainVariables.smoothCarPath = makePath()
+/***************************************************************************************/
+// end of path creation
+/***************************************************************************************/
 
+/***************************************************************************************/
+// makes path vectors for the car to follow
+/***************************************************************************************/
 function makePathVectors() {
     for (let i = 0; i < mainVariables.smoothCarPath.length; i++) {
         let nextIndex = (i + 1) % mainVariables.smoothCarPath.length
@@ -202,7 +230,13 @@ function makePathVectors() {
 }
 
 makePathVectors()
+/***************************************************************************************/
+// end of path creation
+/***************************************************************************************/
 
+/***************************************************************************************/
+// handles camera placement when camera movement is enabled
+/***************************************************************************************/
 function orbitingCamera(t) {
     gl.useProgram(programs.main)
     let rate = 0.025
@@ -217,8 +251,13 @@ function orbitingCamera(t) {
 
     mainVariables.cameraTime += 0.1
 }
+/***************************************************************************************/
+// end of camera movement
+/***************************************************************************************/
 
-// move car along smoothCarPath pointed at carPathVectors
+/***************************************************************************************/
+// moves car along smoothCarPath pointed at carPathVectors
+/***************************************************************************************/
 function moveCar(t) {
     let rate = 0.05
     let speed = 0.5
@@ -245,7 +284,13 @@ function moveCar(t) {
 
     mainVariables.carTime += 0.1
 }
+/***************************************************************************************/
+// end of car movement
+/***************************************************************************************/
 
+/***************************************************************************************/
+// creates all event listeners needed for the project
+/***************************************************************************************/
 function createEventListeners() {
     window.addEventListener('keydown', function (event) {
         if (event.key === 'l') {
@@ -293,8 +338,13 @@ function createEventListeners() {
         }
     })
 }
+/***************************************************************************************/
+// end of event listeners
+/***************************************************************************************/
 
-// Helper Functions
+/***************************************************************************************/
+// Initialize WebGL
+/***************************************************************************************/
 function initWebGL() {
     canvas = document.getElementById('webgl')
     gl = canvas.getContext('webgl')
@@ -319,7 +369,38 @@ function initWebGL() {
 
     gl.useProgram(programs.main)
 }
+/***************************************************************************************/
+// end of WebGL initialization
+/***************************************************************************************/
 
+/***************************************************************************************/
+// Connect HTML elements to JS
+/***************************************************************************************/
+function connectHTML() {
+    mainVariables.inputs.lightOn = document.getElementById('lightOn')
+    mainVariables.inputs.shadowEnabled =
+        document.getElementById('shadowEnabled')
+    mainVariables.inputs.cameraMoving = document.getElementById('cameraMoving')
+    mainVariables.inputs.carMoving = document.getElementById('carMoving')
+    mainVariables.inputs.cameraFollowing =
+        document.getElementById('cameraFollowing')
+
+    mainVariables.displays.cameraPosition =
+        document.getElementById('cameraPosition')
+    mainVariables.displays.cameraLookAt =
+        document.getElementById('cameraLookAt')
+    mainVariables.displays.carPosition = document.getElementById('carPosition')
+    mainVariables.displays.carRotation = document.getElementById('carRotation')
+    mainVariables.displays.lightPosition =
+        document.getElementById('lightPosition')
+}
+/***************************************************************************************/
+// end of connecting HTML elements
+/***************************************************************************************/
+
+/***************************************************************************************/
+// Initialize models
+/***************************************************************************************/
 async function initModels() {
     const stopSign = new Model(
         'stopSign',
@@ -403,7 +484,13 @@ async function initModels() {
 
     console.log('Models loaded')
 }
+/***************************************************************************************/
+// end of model initialization
+/***************************************************************************************/
 
+/***************************************************************************************/
+// Initialize model buffers
+/***************************************************************************************/
 async function initModelBuffers(model) {
     gl.useProgram(programs.main)
     let modelBuffers = {}
@@ -472,7 +559,13 @@ async function initModelBuffers(model) {
 
     model.buffers = modelBuffers
 }
+/***************************************************************************************/
+// end of model buffer initialization
+/***************************************************************************************/
 
+/***************************************************************************************/
+// Initialize shadow buffers
+/***************************************************************************************/
 async function initShadowBuffers() {
     gl.useProgram(programs.shadow)
     let shadowBuffers = {}
@@ -541,7 +634,13 @@ async function initShadowBuffers() {
 
     console.log('Shadow buffers initialized')
 }
+/***************************************************************************************/
+// End of shadow buffer initialization
+/***************************************************************************************/
 
+/***************************************************************************************/
+// Initialize skybox buffers
+/***************************************************************************************/
 async function initSkyBoxBuffers() {
     gl.useProgram(programs.skybox)
     let skyboxBuffers = {}
@@ -586,7 +685,14 @@ async function initSkyBoxBuffers() {
 
     console.log('Skybox buffers initialized')
 }
+/***************************************************************************************/
+// end of skybox buffer initialization
+/***************************************************************************************/
 
+/***************************************************************************************/
+// Initialize buffers -  starts by initializing shadow buffers, then initializes model buffers, then initializes skybox buffers
+// Also adds buffers to the programs dictionary
+/***************************************************************************************/
 async function initBuffers() {
     await initShadowBuffers()
 
@@ -607,7 +713,13 @@ async function initBuffers() {
 
     console.log('Buffers initialized')
 }
+/***************************************************************************************/
+// end of buffer initialization
+/***************************************************************************************/
 
+/***************************************************************************************/
+// load textures
+/***************************************************************************************/
 async function loadTextures() {
     for (let [name, model] of Object.entries(models)) {
         gl.useProgram(programs.main)
@@ -648,7 +760,13 @@ async function loadTextures() {
     }
     console.log('Textures loaded')
 }
+/***************************************************************************************/
+// end of texture loading
+/***************************************************************************************/
 
+/***************************************************************************************/
+// finds the top of the lamp in the scene
+/***************************************************************************************/
 function findTopOfLamp() {
     let lamp = models.lamp
     let maxY = 0
@@ -660,14 +778,20 @@ function findTopOfLamp() {
 
     return maxY
 }
+/***************************************************************************************/
+// end of finding top of lamp
+/***************************************************************************************/
 
+/***************************************************************************************/
+// setup lighting
+/***************************************************************************************/
 function setupLighting() {
     gl.useProgram(programs.main)
 
     let position = vec4(0, findTopOfLamp() + 0.0, 0, 1.0)
 
-    const diffuseLight = [0.8, 0.8, 0.8, 1.0]
-    const ambientLight = [0.3, 0.3, 0.3, 1.0]
+    const diffuseLight = [0.4, 0.4, 0.4, 1.0]
+    const ambientLight = [0.1, 0.1, 0.1, 1.0]
     const specularLight = [0.8, 0.8, 0.8, 1.0]
 
     let light = new Light(position, diffuseLight, specularLight, ambientLight)
@@ -701,7 +825,13 @@ function setupLighting() {
 
     console.log('Lighting setup')
 }
+/***************************************************************************************/
+// end of lighting setup
+/***************************************************************************************/
 
+/***************************************************************************************/
+// setup camera
+/***************************************************************************************/
 function setupCamera() {
     let coordinates = vec3(0.0, 5.0, 10.0)
     let lookingAt = vec3(0.0, 0.0, 0.0)
@@ -722,7 +852,13 @@ function setupCamera() {
     )
     cameras.mainCamera = camera
 }
+/***************************************************************************************/
+// end of camera setup
+/***************************************************************************************/
 
+/***************************************************************************************/
+// setup scene - model placement and orientation
+/***************************************************************************************/
 function setupScene() {
     models.car.setTranslation(
         translate(
@@ -736,7 +872,13 @@ function setupScene() {
     models.stopSign.setTranslation(translate(4.5, 0, 0))
     models.stopSign.setRotation(rotateY(-90))
 }
+/***************************************************************************************/
+// end of scene setup
+/***************************************************************************************/
 
+/***************************************************************************************/
+// setup shadow mapping
+/***************************************************************************************/
 function setupShadows() {
     gl.useProgram(programs.shadow)
 
@@ -761,7 +903,13 @@ function setupShadows() {
 
     console.log('Shadows setup')
 }
+/***************************************************************************************/
+// end of shadow setup
+/***************************************************************************************/
 
+/***************************************************************************************/
+// add attributes to main program
+/***************************************************************************************/
 function addAttributesMain() {
     let vPosition = gl.getAttribLocation(programs.main, 'vPosition')
     let vNormal = gl.getAttribLocation(programs.main, 'vNormal')
@@ -779,20 +927,38 @@ function addAttributesMain() {
         ambientColor: ambientColor,
     }
 }
+/***************************************************************************************/
+// end of adding attributes to main program
+/***************************************************************************************/
 
+/***************************************************************************************/
+// add attributes to shadow program
+/***************************************************************************************/
 function addAttributesShadow() {
     let vPosition = gl.getAttribLocation(programs.shadow, 'vPosition')
     programs.shadow.attributes = {
         vPosition: vPosition,
     }
 }
+/***************************************************************************************/
+// end of adding attributes to shadow program
+/***************************************************************************************/
 
+/***************************************************************************************/
+// disable attributes of a program
+/***************************************************************************************/
 function disableAttributes(program) {
     for (let attr in program.attributes) {
         gl.disableVertexAttribArray(program.attributes[attr])
     }
 }
+/***************************************************************************************/
+// end of disabling attributes
+/***************************************************************************************/
 
+/***************************************************************************************/
+// add uniforms to main program
+/***************************************************************************************/
 function addUniformsMain() {
     let cameraView = gl.getUniformLocation(programs.main, 'cameraView')
     let cameraProjection = gl.getUniformLocation(
@@ -812,6 +978,9 @@ function addUniformsMain() {
     let shadowMatrix = gl.getUniformLocation(programs.main, 'shadowMatrix')
     let shadowEnabled = gl.getUniformLocation(programs.main, 'shadowEnabled')
     let additionalBias = gl.getUniformLocation(programs.main, 'additionalBias')
+    let hasNoShadow = gl.getUniformLocation(programs.main, 'hasNoShadow')
+
+    gl.uniform1f(shadowEnabled, 1)
 
     programs.main.uniforms.cameraView = cameraView
     programs.main.uniforms.cameraProjection = cameraProjection
@@ -825,8 +994,15 @@ function addUniformsMain() {
     programs.main.uniforms.shadowMatrix = shadowMatrix
     programs.main.uniforms.shadowEnabled = shadowEnabled
     programs.main.uniforms.additionalBias = additionalBias
+    programs.main.uniforms.hasNoShadow = hasNoShadow
 }
+/***************************************************************************************/
+// end of adding uniforms to main program
+/***************************************************************************************/
 
+/***************************************************************************************/
+// add uniforms to shadow program
+/***************************************************************************************/
 function addUniformsShadow() {
     let lightView = gl.getUniformLocation(programs.shadow, 'lightView')
     let lightProjection = gl.getUniformLocation(
@@ -848,7 +1024,13 @@ function addUniformsShadow() {
         modelScale: modelScale,
     }
 }
+/***************************************************************************************/
+// end of adding uniforms to shadow program
+/***************************************************************************************/
 
+/***************************************************************************************/
+// add uniforms to skybox program
+/***************************************************************************************/
 function addUniformsSkybox() {
     let cameraView = gl.getUniformLocation(programs.skybox, 'cameraView')
     let cameraProjection = gl.getUniformLocation(
@@ -872,14 +1054,26 @@ function addUniformsSkybox() {
         modelScale: modelScale,
     }
 }
+/***************************************************************************************/
+// end of adding uniforms to skybox program
+/***************************************************************************************/
 
+/***************************************************************************************/
+// add attributes to skybox program
+/***************************************************************************************/
 function addAttributesSkybox() {
     let vPosition = gl.getAttribLocation(programs.skybox, 'vPosition')
     programs.skybox.attributes = {
         vPosition: vPosition,
     }
 }
+/***************************************************************************************/
+// end of adding attributes to skybox program
+/***************************************************************************************/
 
+/***************************************************************************************/
+// handles drawing models in scene
+/***************************************************************************************/
 function drawModel(program, model) {
     gl.useProgram(program)
 
@@ -972,6 +1166,12 @@ function drawModel(program, model) {
         gl.enableVertexAttribArray(ambientColor)
     }
 
+    if (model.name === 'lamp') {
+        gl.uniform1i(gl.getUniformLocation(program, 'hasNoShadow'), 1)
+    } else {
+        gl.uniform1i(gl.getUniformLocation(program, 'hasNoShadow'), 0)
+    }
+
     gl.uniformMatrix4fv(
         program.uniforms.cameraView,
         false,
@@ -1010,10 +1210,11 @@ function drawModel(program, model) {
 
     gl.uniform1i(program.uniforms.lightOn, mainVariables.lightOn ? 1 : 0)
 
-    gl.uniform1i(
-        program.uniforms.shadowEnabled,
-        mainVariables.shadowEnabled ? 1 : 0
-    )
+    if (mainVariables.shadowEnabled) {
+        gl.uniform1i(program.uniforms.shadowEnabled, 1)
+    } else {
+        gl.uniform1i(program.uniforms.shadowEnabled, 0)
+    }
 
     gl.uniform4fv(
         program.uniforms.lightPosition,
@@ -1041,7 +1242,13 @@ function drawModel(program, model) {
     gl.activeTexture(gl.TEXTURE2)
     gl.bindTexture(gl.TEXTURE_CUBE_MAP, null)
 }
+/***************************************************************************************/
+// end of drawing model
+/***************************************************************************************/
 
+/***************************************************************************************/
+// handles drawing shadow map
+/***************************************************************************************/
 function drawShadow(program, model) {
     gl.useProgram(programs.shadow)
 
@@ -1095,7 +1302,13 @@ function drawShadow(program, model) {
 
     gl.disableVertexAttribArray(vPosition)
 }
+/***************************************************************************************/
+// end of drawing shadow map
+/***************************************************************************************/
 
+/***************************************************************************************/
+// handles drawing skybox
+/***************************************************************************************/
 function drawSkyBox() {
     gl.useProgram(programs.skybox)
     gl.disable(gl.CULL_FACE)
@@ -1146,12 +1359,22 @@ function drawSkyBox() {
     gl.activeTexture(gl.TEXTURE2)
     gl.bindTexture(gl.TEXTURE_CUBE_MAP, null)
 }
+/***************************************************************************************/
+// end of drawing skybox
+/***************************************************************************************/
 
+/***************************************************************************************/
+// Main Render Function
+/***************************************************************************************/
 function render() {
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
+    // handles rendering skybox
+    /***************************************************************************************/
     drawSkyBox()
-
+    /***************************************************************************************/
+    // handles drawing to shadow map
+    /***************************************************************************************/
     if (mainVariables.shadowEnabled) {
         gl.useProgram(programs.shadow)
 
@@ -1173,7 +1396,7 @@ function render() {
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
         for (let [name, model] of Object.entries(models)) {
-            if (model.name === 'lamp' || model.name === 'street') {
+            if (model.name === 'lamp') {
                 continue
             }
             drawShadow(programs.shadow, model)
@@ -1195,7 +1418,9 @@ function render() {
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
         gl.useProgram(programs.main)
     }
-
+    /*****************************************************************************************/
+    // handles rendering models in scene
+    /*****************************************************************************************/
     for (let [name, model] of Object.entries(models)) {
         if (model.name === 'car') {
             gl.uniform1f(programs.main.uniforms.additionalBias, 1)
@@ -1209,7 +1434,9 @@ function render() {
             drawModel(programs.main, childModel)
         }
     }
-
+    /*****************************************************************************************/
+    // checkers for change in state options
+    /*****************************************************************************************/
     if (mainVariables.cameraMoving) {
         orbitingCamera(mainVariables.cameraTime)
     }
@@ -1217,11 +1444,15 @@ function render() {
     if (mainVariables.carMoving) {
         moveCar(mainVariables.carTime)
     }
+    /*****************************************************************************************/
 
     requestAnimationFrame(render)
 }
-
+/***************************************************************************************/
+// End of Render Function
+/***************************************************************************************/
 // Main Function
+/***************************************************************************************/
 function main() {
     initWebGL()
     initModels().then(() => {
@@ -1243,5 +1474,9 @@ function main() {
         })
     })
 }
-
+/***************************************************************************************/
+// End of Main Function
+/***************************************************************************************/
 window.onload = main
+
+/***************************************************************************************/
