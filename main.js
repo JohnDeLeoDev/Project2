@@ -10,71 +10,240 @@ let textures = {}
 let mainVariables = {
     lightOn: true,
     shadowEnabled: true,
-    carBoundary: 3.1,
-    cameraMoving: true,
+    carBoundary: 3.2,
+    carYOffset: -0.3,
+    cameraMoving: false,
     cameraFollowing: false,
     carMoving: false,
-    t: 0,
+    carTime: 0,
+    cameraTime: 0,
     shadowMapSize: 2048,
     sceneSize: 10,
+    carPathPoints: [],
+    smoothCarPath: [],
+    carPathVectors: [],
 }
-let carPath = [
-    vec3(-mainVariables.carBoundary, -0.1, -mainVariables.carBoundary),
-    vec3(-mainVariables.carBoundary, -0.1, mainVariables.carBoundary),
-    vec3(mainVariables.carBoundary, -0.1, mainVariables.carBoundary),
-    vec3(mainVariables.carBoundary, -0.1, -mainVariables.carBoundary),
-    vec3(-mainVariables.carBoundary, -0.1, -mainVariables.carBoundary),
+let carPathPoints = [
+    // left edge
+    vec3(-mainVariables.carBoundary, mainVariables.carYOffset, 0),
+    // bottom left
+    vec3(
+        -mainVariables.carBoundary,
+        mainVariables.carYOffset,
+        -mainVariables.carBoundary
+    ),
+    // bottom edge
+    vec3(0, mainVariables.carYOffset, -mainVariables.carBoundary),
+    // bottom right
+    vec3(
+        mainVariables.carBoundary,
+        mainVariables.carYOffset,
+        -mainVariables.carBoundary
+    ),
+    // right edge
+    vec3(mainVariables.carBoundary, mainVariables.carYOffset, 0),
+    // top right
+    vec3(
+        mainVariables.carBoundary,
+        mainVariables.carYOffset,
+        mainVariables.carBoundary
+    ),
+    // top edge
+    vec3(0, mainVariables.carYOffset, mainVariables.carBoundary),
+    // top left
+    vec3(
+        -mainVariables.carBoundary,
+        mainVariables.carYOffset,
+        mainVariables.carBoundary
+    ),
+    // left edge
+    vec3(-mainVariables.carBoundary, mainVariables.carYOffset, 0),
+    // top left
+    vec3(
+        -mainVariables.carBoundary,
+        mainVariables.carYOffset,
+        mainVariables.carBoundary
+    ),
 ]
-let smoothCarPath = []
-for (let i = 0; i < carPath.length - 1; i++) {
-    let p0 = carPath[i]
-    let p1 = carPath[i + 1]
-    smoothCarPath.push(p0)
-    smoothCarPath.push(mix(p0, p1, 0.25))
-    smoothCarPath.push(mix(p0, p1, 0.5))
-    smoothCarPath.push(mix(p0, p1, 0.75))
+mainVariables.carPathPoints = carPathPoints
+
+function makePath() {
+    let path = []
+    let points = carPathPoints
+    let divisions = 100
+    let t = 0
+    let step = 1 / divisions
+    let p0 = points[0]
+    let p1 = points[1]
+    let p2 = points[2]
+    let p3 = points[3]
+    let p4 = points[4]
+    let p5 = points[5]
+    let p6 = points[6]
+    let p7 = points[7]
+
+    // p0 to p2 - left edge to bottom edge - -boundary, 0 to 0, boundary
+    // starting coord is p0
+    // ending coord is p2
+    for (let i = 0; i <= divisions; i++) {
+        let x =
+            Math.pow(1 - t, 3) * p0[0] +
+            3 * Math.pow(1 - t, 2) * t * p1[0] +
+            3 * (1 - t) * Math.pow(t, 2) * p2[0] +
+            Math.pow(t, 3) * p2[0]
+        let y =
+            Math.pow(1 - t, 3) * p0[1] +
+            3 * Math.pow(1 - t, 2) * t * p1[1] +
+            3 * (1 - t) * Math.pow(t, 2) * p2[1] +
+            Math.pow(t, 3) * p2[1]
+        let z =
+            Math.pow(1 - t, 3) * p0[2] +
+            3 * Math.pow(1 - t, 2) * t * p1[2] +
+            3 * (1 - t) * Math.pow(t, 2) * p2[2] +
+            Math.pow(t, 3) * p2[2]
+        path.push(vec3(x, y, z))
+        t += step
+    }
+
+    // p2 to p4 - bottom edge to right edge - boundary, 0 to 0, -boundary
+    // starting coord is p2
+    // ending coord is p4
+    t = 0
+    for (let i = 0; i <= divisions; i++) {
+        let x =
+            Math.pow(1 - t, 3) * p2[0] +
+            3 * Math.pow(1 - t, 2) * t * p3[0] +
+            3 * (1 - t) * Math.pow(t, 2) * p4[0] +
+            Math.pow(t, 3) * p4[0]
+        let y =
+            Math.pow(1 - t, 3) * p2[1] +
+            3 * Math.pow(1 - t, 2) * t * p3[1] +
+            3 * (1 - t) * Math.pow(t, 2) * p4[1] +
+            Math.pow(t, 3) * p4[1]
+        let z =
+            Math.pow(1 - t, 3) * p2[2] +
+            3 * Math.pow(1 - t, 2) * t * p3[2] +
+            3 * (1 - t) * Math.pow(t, 2) * p4[2] +
+            Math.pow(t, 3) * p4[2]
+        path.push(vec3(x, y, z))
+        t += step
+    }
+
+    // p4 to p6 - right edge to top edge - boundary, 0 to 0, boundary
+    // starting coord is p4
+    // ending coord is p6
+    t = 0
+    for (let i = 0; i <= divisions; i++) {
+        let x =
+            Math.pow(1 - t, 3) * p4[0] +
+            3 * Math.pow(1 - t, 2) * t * p5[0] +
+            3 * (1 - t) * Math.pow(t, 2) * p6[0] +
+            Math.pow(t, 3) * p6[0]
+        let y =
+            Math.pow(1 - t, 3) * p4[1] +
+            3 * Math.pow(1 - t, 2) * t * p5[1] +
+            3 * (1 - t) * Math.pow(t, 2) * p6[1] +
+            Math.pow(t, 3) * p6[1]
+        let z =
+            Math.pow(1 - t, 3) * p4[2] +
+            3 * Math.pow(1 - t, 2) * t * p5[2] +
+            3 * (1 - t) * Math.pow(t, 2) * p6[2] +
+            Math.pow(t, 3) * p6[2]
+        path.push(vec3(x, y, z))
+        t += step
+    }
+
+    // p6 to p0 - top edge to left edge - boundary, 0 to 0, -boundary
+    // starting coord is p6
+    // ending coord is p0
+    t = 0
+    for (let i = 0; i <= divisions; i++) {
+        let x =
+            Math.pow(1 - t, 3) * p6[0] +
+            3 * Math.pow(1 - t, 2) * t * p7[0] +
+            3 * (1 - t) * Math.pow(t, 2) * p0[0] +
+            Math.pow(t, 3) * p0[0]
+        let y =
+            Math.pow(1 - t, 3) * p6[1] +
+            3 * Math.pow(1 - t, 2) * t * p7[1] +
+            3 * (1 - t) * Math.pow(t, 2) * p0[1] +
+            Math.pow(t, 3) * p0[1]
+        let z =
+            Math.pow(1 - t, 3) * p6[2] +
+            3 * Math.pow(1 - t, 2) * t * p7[2] +
+            3 * (1 - t) * Math.pow(t, 2) * p0[2] +
+            Math.pow(t, 3) * p0[2]
+        path.push(vec3(x, y, z))
+        t += step
+    }
+
+    for (let i = 0; i < path.length; i++) {
+        let roundX = Math.round(path[i][0])
+        let roundZ = Math.round(path[i][2])
+    }
+
+    // reverse path
+    path = path.reverse()
+
+    return path
 }
+
+mainVariables.smoothCarPath = makePath()
+
+function makePathVectors() {
+    for (let i = 0; i < mainVariables.smoothCarPath.length; i++) {
+        let nextIndex = (i + 1) % mainVariables.smoothCarPath.length
+        let vector = subtract(
+            mainVariables.smoothCarPath[nextIndex],
+            mainVariables.smoothCarPath[i]
+        )
+        mainVariables.carPathVectors.push(normalize(vector))
+    }
+}
+
+makePathVectors()
 
 function orbitingCamera(t) {
     gl.useProgram(programs.main)
-    let rate = 0.1
-    let radius = 20
+    let rate = 0.025
+    let radius = 10
     let angle = rate * t
+    let yAngle = 4.0 * angle
     let x = radius * Math.sin(angle)
+    let y = 4.0 + 1.0 * Math.sin(yAngle)
     let z = radius * Math.cos(angle)
-    cameras.mainCamera.moveTo(vec3(x, 4.0, z))
-    cameras.mainCamera.lookAt(vec3(0.0, -2.0, 0.0))
+    cameras.mainCamera.moveTo(vec3(x, y, z))
+    cameras.mainCamera.lookAt(vec3(0.0, 0.0, 0.0))
+
+    mainVariables.cameraTime += 0.1
 }
 
+// move car along smoothCarPath pointed at carPathVectors
 function moveCar(t) {
-    let i = Math.floor(t) % smoothCarPath.length
-    let p0 = smoothCarPath[i]
-    let p1 = smoothCarPath[(i + 1) % smoothCarPath.length]
-    let p = mix(p0, p1, t - Math.floor(t))
+    let rate = 0.05
+    let speed = 0.5
+    let angle = rate * t
+    let x = speed * Math.sin(angle)
+    let z = speed * Math.cos(angle)
+    let car = models.car
+    let carPathIndex = Math.floor(
+        (angle * 100) % mainVariables.smoothCarPath.length
+    )
+    let carPathVector = mainVariables.carPathVectors[carPathIndex]
+    let carPathPoint = mainVariables.smoothCarPath[carPathIndex]
+    let carRotation = rotateY(
+        90 - (Math.atan2(carPathVector[2], carPathVector[0]) * 180) / Math.PI
+    )
+    car.setTranslation(
+        translate(carPathPoint[0], carPathPoint[1], carPathPoint[2])
+    )
+    car.setRotation(carRotation)
 
-    if (
-        p0[0] === mainVariables.carBoundary &&
-        p0[2] === -mainVariables.carBoundary
-    ) {
-        models.car.setRotation(rotateY(270))
-    } else if (
-        p0[0] === mainVariables.carBoundary &&
-        p0[2] === mainVariables.carBoundary
-    ) {
-        models.car.setRotation(rotateY(180))
-    } else if (
-        p0[0] === -mainVariables.carBoundary &&
-        p0[2] === mainVariables.carBoundary
-    ) {
-        models.car.setRotation(rotateY(90))
-    } else if (
-        p0[0] === -mainVariables.carBoundary &&
-        p0[2] === -mainVariables.carBoundary
-    ) {
-        models.car.setRotation(rotateY(0))
-    }
+    // current x, z position of car rounded to 2 decimal places
+    let roundX = Math.round(carPathPoint[0] * 100) / 100
+    let roundZ = Math.round(carPathPoint[2] * 100) / 100
 
-    models.car.setTranslation(translate(p[0], -0.1, p[2]))
+    mainVariables.carTime += 0.1
 }
 
 function createEventListeners() {
@@ -146,6 +315,7 @@ function initWebGL() {
 
     programs.main = initShaders(gl, 'main-vshader', 'main-fshader')
     programs.shadow = initShaders(gl, 'shadow-vshader', 'shadow-fshader')
+    programs.skybox = initShaders(gl, 'skybox-vshader', 'skybox-fshader')
 
     gl.useProgram(programs.main)
 }
@@ -185,12 +355,22 @@ async function initModels() {
         'https://web.cs.wpi.edu/~jmcuneo/cs4731/project3/bunny.mtl'
     )
 
+    let skybox = new SkyBox(
+        'https://web.cs.wpi.edu/~jmcuneo/cs4731/project2/skybox_posx.png',
+        'https://web.cs.wpi.edu/~jmcuneo/cs4731/project2/skybox_negx.png',
+        'https://web.cs.wpi.edu/~jmcuneo/cs4731/project2/skybox_posy.png',
+        'https://web.cs.wpi.edu/~jmcuneo/cs4731/project2/skybox_negy.png',
+        'https://web.cs.wpi.edu/~jmcuneo/cs4731/project2/skybox_posz.png',
+        'https://web.cs.wpi.edu/~jmcuneo/cs4731/project2/skybox_negz.png'
+    )
+
     await Promise.all([
         stopSign.load(),
         lamp.load(),
         car.load(),
         street.load(),
         bunny.load(),
+        skybox.load(),
     ])
 
     models.stopSign = stopSign
@@ -219,6 +399,7 @@ async function initModels() {
 
     programs.main.models = models
     programs.shadow.models = models
+    programs.skybox.model = skybox
 
     console.log('Models loaded')
 }
@@ -296,6 +477,8 @@ async function initShadowBuffers() {
     gl.useProgram(programs.shadow)
     let shadowBuffers = {}
 
+    gl.activeTexture(gl.TEXTURE0)
+
     programs.shadow.depthTexture = gl.createTexture()
 
     gl.bindTexture(gl.TEXTURE_2D, programs.shadow.depthTexture)
@@ -324,7 +507,7 @@ async function initShadowBuffers() {
         programs.shadow.depthTexture,
         0
     )
-
+    gl.activeTexture(gl.TEXTURE4)
     let unusedTexture = gl.createTexture()
     gl.bindTexture(gl.TEXTURE_2D, unusedTexture)
     gl.texImage2D(
@@ -351,7 +534,57 @@ async function initShadowBuffers() {
         0
     )
 
+    gl.activeTexture(gl.TEXTURE0)
+    gl.bindTexture(gl.TEXTURE_2D, programs.shadow.depthTexture)
+
+    gl.bindTexture(gl.TEXTURE_2D, null)
+
     console.log('Shadow buffers initialized')
+}
+
+async function initSkyBoxBuffers() {
+    gl.useProgram(programs.skybox)
+    let skyboxBuffers = {}
+
+    skyboxBuffers.position = gl.createBuffer()
+    gl.bindBuffer(gl.ARRAY_BUFFER, skyboxBuffers.position)
+    gl.bufferData(
+        gl.ARRAY_BUFFER,
+        new Float32Array(programs.skybox.model.getPositions()),
+        gl.STATIC_DRAW,
+        0,
+        0
+    )
+
+    programs.skybox.buffers = skyboxBuffers
+
+    // load skybox texture
+    gl.activeTexture(gl.TEXTURE2)
+    programs.skybox.texture = gl.createTexture()
+    gl.bindTexture(gl.TEXTURE_CUBE_MAP, programs.skybox.texture)
+
+    for (let i = 0; i < programs.skybox.model.texImages.length; i++) {
+        let image = programs.skybox.model.texImages[i]
+
+        gl.texImage2D(
+            gl.TEXTURE_CUBE_MAP_POSITIVE_X + i,
+            0,
+            gl.RGBA,
+            gl.RGBA,
+            gl.UNSIGNED_BYTE,
+            image
+        )
+    }
+
+    gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+    gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+    gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+    gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+
+    // unbind texture
+    gl.bindTexture(gl.TEXTURE_CUBE_MAP, null)
+
+    console.log('Skybox buffers initialized')
 }
 
 async function initBuffers() {
@@ -365,6 +598,8 @@ async function initBuffers() {
             await initModelBuffers(childModel)
         }
     }
+
+    await initSkyBoxBuffers()
 
     // add buffers to programs dictionary
     programs.main.models = models
@@ -468,8 +703,8 @@ function setupLighting() {
 }
 
 function setupCamera() {
-    let coordinates = vec3(0.0, 4.0, 10.0)
-    let lookingAt = vec3(0.0, -2.0, -5.0)
+    let coordinates = vec3(0.0, 5.0, 10.0)
+    let lookingAt = vec3(0.0, 0.0, 0.0)
     let upDirection = vec3(0.0, 1.0, 0.0)
     let fov = 45
     let aspect = canvas.width / canvas.height
@@ -490,8 +725,13 @@ function setupCamera() {
 
 function setupScene() {
     models.car.setTranslation(
-        translate(-mainVariables.carBoundary, 0, -mainVariables.carBoundary)
+        translate(
+            mainVariables.smoothCarPath[0][0],
+            mainVariables.smoothCarPath[0][1],
+            mainVariables.smoothCarPath[0][2]
+        )
     )
+    models.car.setRotation(rotateY(0))
     models.car.setScale(scalem(0.5, 0.5, 0.5))
     models.stopSign.setTranslation(translate(4.5, 0, 0))
     models.stopSign.setRotation(rotateY(-90))
@@ -502,12 +742,12 @@ function setupShadows() {
 
     // look at [posX, posY, posZ]
     programs.shadow.lightView = lookAt(
-        vec3(0, findTopOfLamp() + 0.0, 0),
+        vec3(0, findTopOfLamp() - 1.0, 0),
         vec3(0, 0, 0),
         vec3(0, 0, 1)
     )
 
-    programs.shadow.lightProjection = perspective(160, 1, 0.1, 100.0)
+    programs.shadow.lightProjection = perspective(130, 1, 0.1, 100.0)
 
     let textureMatrix = mat4()
     textureMatrix = mult(textureMatrix, translate(0.5, 0.5, 0.5))
@@ -571,6 +811,7 @@ function addUniformsMain() {
     let lightPosition = gl.getUniformLocation(programs.main, 'lightPosition')
     let shadowMatrix = gl.getUniformLocation(programs.main, 'shadowMatrix')
     let shadowEnabled = gl.getUniformLocation(programs.main, 'shadowEnabled')
+    let additionalBias = gl.getUniformLocation(programs.main, 'additionalBias')
 
     programs.main.uniforms.cameraView = cameraView
     programs.main.uniforms.cameraProjection = cameraProjection
@@ -583,6 +824,7 @@ function addUniformsMain() {
     programs.main.uniforms.lightPosition = lightPosition
     programs.main.uniforms.shadowMatrix = shadowMatrix
     programs.main.uniforms.shadowEnabled = shadowEnabled
+    programs.main.uniforms.additionalBias = additionalBias
 }
 
 function addUniformsShadow() {
@@ -604,6 +846,37 @@ function addUniformsShadow() {
         modelTranslation: modelTranslation,
         modelRotation: modelRotation,
         modelScale: modelScale,
+    }
+}
+
+function addUniformsSkybox() {
+    let cameraView = gl.getUniformLocation(programs.skybox, 'cameraView')
+    let cameraProjection = gl.getUniformLocation(
+        programs.skybox,
+        'cameraProjection'
+    )
+    let skyboxTexture = gl.getUniformLocation(programs.skybox, 'skyboxTexture')
+    let modelTranslation = gl.getUniformLocation(
+        programs.skybox,
+        'modelTranslation'
+    )
+    let modelRotation = gl.getUniformLocation(programs.skybox, 'modelRotation')
+    let modelScale = gl.getUniformLocation(programs.skybox, 'modelScale')
+
+    programs.skybox.uniforms = {
+        cameraView: cameraView,
+        cameraProjection: cameraProjection,
+        skyboxTexture: skyboxTexture,
+        modelTranslation: modelTranslation,
+        modelRotation: modelRotation,
+        modelScale: modelScale,
+    }
+}
+
+function addAttributesSkybox() {
+    let vPosition = gl.getAttribLocation(programs.skybox, 'vPosition')
+    programs.skybox.attributes = {
+        vPosition: vPosition,
     }
 }
 
@@ -748,8 +1021,8 @@ function drawModel(program, model) {
     )
 
     gl.activeTexture(gl.TEXTURE0)
-    gl.bindTexture(gl.TEXTURE_CUBE_MAP, programs.shadow.shadowTexture)
-    gl.uniform1i(gl.getUniformLocation(program, 'shadowTexture'), 0)
+    gl.bindTexture(gl.TEXTURE_2D, programs.shadow.depthTexture)
+    gl.uniform1i(program.uniforms.shadowTexture, 0)
 
     gl.activeTexture(gl.TEXTURE1)
     gl.bindTexture(gl.TEXTURE_2D, model.texture)
@@ -759,7 +1032,14 @@ function drawModel(program, model) {
 
     disableAttributes(program)
 
+    gl.activeTexture(gl.TEXTURE0)
     gl.bindTexture(gl.TEXTURE_2D, null)
+
+    gl.activeTexture(gl.TEXTURE1)
+    gl.bindTexture(gl.TEXTURE_2D, null)
+
+    gl.activeTexture(gl.TEXTURE2)
+    gl.bindTexture(gl.TEXTURE_CUBE_MAP, null)
 }
 
 function drawShadow(program, model) {
@@ -816,53 +1096,112 @@ function drawShadow(program, model) {
     gl.disableVertexAttribArray(vPosition)
 }
 
-function render() {
-    gl.useProgram(programs.main)
-    gl.clearColor(0.0, 0.0, 0.0, 1.0)
-    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
-
-    gl.useProgram(programs.shadow)
-    gl.enable(gl.CULL_FACE)
-    gl.cullFace(gl.FRONT)
-    gl.bindFramebuffer(gl.FRAMEBUFFER, programs.shadow.framebuffer)
-    let status = gl.checkFramebufferStatus(gl.FRAMEBUFFER)
-    if (status !== gl.FRAMEBUFFER_COMPLETE) {
-        console.log('Framebuffer is not complete')
-    }
-    gl.viewport(0, 0, mainVariables.shadowMapSize, mainVariables.shadowMapSize)
-    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
-
-    gl.uniformMatrix4fv(
-        gl.getUniformLocation(programs.shadow, 'lightView'),
-        false,
-        flatten(programs.shadow.lightView)
-    )
-
-    gl.uniformMatrix4fv(
-        gl.getUniformLocation(programs.shadow, 'lightProjection'),
-        false,
-        flatten(programs.shadow.lightProjection)
-    )
-
-    for (let [name, model] of Object.entries(models)) {
-        if (model.name === 'street') {
-            continue
-        }
-        drawShadow(programs.shadow, model)
-        for (let [childName, childModel] of Object.entries(
-            model.embeddedObjects
-        )) {
-            drawShadow(programs.shadow, childModel)
-        }
-    }
-
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null)
-    gl.viewport(0, 0, gl.canvas.width, gl.canvas.height)
-    gl.useProgram(programs.main)
+function drawSkyBox() {
+    gl.useProgram(programs.skybox)
     gl.disable(gl.CULL_FACE)
+    gl.viewport(0, 0, gl.canvas.width, gl.canvas.height)
+
+    let skybox = programs.skybox.model
+
+    let buffers = programs.skybox.buffers
+
+    if (!buffers) {
+        return
+    }
+
+    let vPosition = programs.skybox.attributes['vPosition']
+    if (vPosition < 0) {
+        console.log('Failed to get vPosition attribute')
+        return
+    } else {
+        gl.bindBuffer(gl.ARRAY_BUFFER, buffers.position)
+        gl.vertexAttribPointer(vPosition, 4, gl.FLOAT, false, 0, 0)
+        gl.enableVertexAttribArray(vPosition)
+    }
+    gl.activeTexture(gl.TEXTURE2)
+    gl.bindTexture(gl.TEXTURE_CUBE_MAP, programs.skybox.texture)
+    gl.uniform1i(programs.skybox.uniforms.skyboxTexture, 2)
+
+    let viewMatrix = mat4()
+    let projectionMatrix = mat4()
+    let translationMatrix = mat4()
+    let rotationMatrix = mat4()
+    let scaleMatrix = mat4()
+
+    gl.uniformMatrix4fv(
+        programs.skybox.uniforms.cameraView,
+        false,
+        flatten(cameras.mainCamera.viewMatrix())
+    )
+
+    gl.uniformMatrix4fv(
+        programs.skybox.uniforms.cameraProjection,
+        false,
+        flatten(cameras.mainCamera.projectionMatrix())
+    )
+
+    gl.drawArrays(gl.TRIANGLES, 0, skybox.getPositions().length / 4)
+
+    disableAttributes(programs.skybox)
+    gl.activeTexture(gl.TEXTURE2)
+    gl.bindTexture(gl.TEXTURE_CUBE_MAP, null)
+}
+
+function render() {
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
+    drawSkyBox()
+
+    if (mainVariables.shadowEnabled) {
+        gl.useProgram(programs.shadow)
+
+        gl.bindFramebuffer(gl.FRAMEBUFFER, programs.shadow.framebuffer)
+
+        let status = gl.checkFramebufferStatus(gl.FRAMEBUFFER)
+        if (status !== gl.FRAMEBUFFER_COMPLETE) {
+            console.log('Framebuffer is not complete')
+        }
+        gl.enable(gl.DEPTH_TEST)
+        gl.cullFace(gl.FRONT)
+        gl.enable(gl.CULL_FACE)
+        gl.viewport(
+            0,
+            0,
+            mainVariables.shadowMapSize,
+            mainVariables.shadowMapSize
+        )
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
+
+        for (let [name, model] of Object.entries(models)) {
+            if (model.name === 'lamp' || model.name === 'street') {
+                continue
+            }
+            drawShadow(programs.shadow, model)
+            for (let [childName, childModel] of Object.entries(
+                model.embeddedObjects
+            )) {
+                drawShadow(programs.shadow, childModel)
+            }
+        }
+
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+        gl.viewport(0, 0, gl.canvas.width, gl.canvas.height)
+        gl.useProgram(programs.main)
+        gl.cullFace(gl.BACK)
+        gl.enable(gl.CULL_FACE)
+    } else {
+        gl.useProgram(programs.shadow)
+        gl.bindFramebuffer(gl.FRAMEBUFFER, programs.shadow.framebuffer)
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
+        gl.useProgram(programs.main)
+    }
+
     for (let [name, model] of Object.entries(models)) {
+        if (model.name === 'car') {
+            gl.uniform1f(programs.main.uniforms.additionalBias, 1)
+        } else {
+            gl.uniform1f(programs.main.uniforms.additionalBias, 0)
+        }
         drawModel(programs.main, model)
         for (let [childName, childModel] of Object.entries(
             model.embeddedObjects
@@ -872,14 +1211,12 @@ function render() {
     }
 
     if (mainVariables.cameraMoving) {
-        orbitingCamera(mainVariables.t)
+        orbitingCamera(mainVariables.cameraTime)
     }
 
     if (mainVariables.carMoving) {
-        moveCar(mainVariables.t)
+        moveCar(mainVariables.carTime)
     }
-
-    mainVariables.t += 0.01
 
     requestAnimationFrame(render)
 }
@@ -897,7 +1234,9 @@ function main() {
                 createEventListeners()
                 addAttributesMain()
                 addAttributesShadow()
+                addAttributesSkybox()
                 addUniformsMain()
+                addUniformsSkybox()
                 setupShadows()
                 render()
             })
