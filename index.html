@@ -56,11 +56,11 @@
         <script id="main-fshader" type="x-shader/x-fragment">
             precision mediump float;
 
-            uniform sampler2D modelTexture; //
-            uniform sampler2D shadowTexture; //
-            uniform samplerCube skyboxTexture; //
+            uniform sampler2D modelTexture; 
+            uniform sampler2D shadowTexture; 
+            uniform samplerCube skyboxTexture; 
 
-            uniform bool useTexture; //
+            uniform bool useTexture; 
 
             varying vec4 fNormal;
             varying vec4 fDiffuseColor;
@@ -72,29 +72,31 @@
             varying vec4 vProjectedTexCoords;
             varying vec3 uCameraPosition;
 
-            uniform float materialShininess; //
+            uniform float materialShininess; 
             
-            uniform vec4 lightAmbient; //
-            uniform vec4 lightDiffuse; //
-            uniform vec4 lightSpecular; //
-            uniform vec3 cameraPosition; //
-            uniform vec4 lightPosition; //
+            uniform vec4 lightAmbient; 
+            uniform vec4 lightDiffuse; 
+            uniform vec4 lightSpecular;
+
+            uniform vec3 cameraPosition; 
+            uniform vec4 lightPosition; 
 
 
-            uniform bool lightOn; //
-            uniform bool shadowEnabled; //
-            uniform bool additionalBias; //
-            uniform bool hasNoShadow; //
+            uniform bool lightOn; 
+            uniform bool shadowEnabled; 
+            uniform bool additionalBias; 
+            uniform bool hasNoShadow; 
             uniform bool isLamp;
             uniform bool envReflEnabled;
             uniform bool refractEnabled;
 
             void main(void) {
 
-                float bias = 0.00005;
+                // shadow mapping
+                ////////////////////////////////////////////////////////////////////////
+                float bias = 0.0001;
 
                 vec3 shadowCoord = vProjectedTexCoords.xyz / vProjectedTexCoords.w;
-                // find current fragment depth
                 float fDepth = shadowCoord.z;
 
                 float shadowDepth = texture2D(shadowTexture, shadowCoord.xy).z;
@@ -106,11 +108,14 @@
                 if (hasNoShadow) {
                     shadowColorVec = vec4(1.0, 1.0, 1.0, 1.0);
                 }
+                ////////////////////////////////////////////////////////////////////////
 
+                // object texture
                 vec4 texColor = useTexture ? texture2D(modelTexture, fTexCoord) : vec4(1.0);
 
+                // object lighting
                 vec3 normal = -fNormal.xyz;
-                vec3 lightDir = normalize(lightPosition.xyz + fPosition.xyz);
+                vec3 lightDir = normalize(-lightPosition.xyz + fPosition.xyz);
                 vec3 E = normalize(fPosition.xyz);
                 vec3 halfVector = normalize(lightDir + E);
 
@@ -119,6 +124,8 @@
                 vec4 diffuse = fDiffuseColor * lightDiffuse * max(dot(normal, lightDir), 0.0);
                 vec4 specular = fSpecularColor * lightSpecular * spec;
 
+                // environment reflections and refractions
+                ////////////////////////////////////////////////////////////////////////
                 vec3 eyeToSurface = normalize(cameraPosition - fPosition.xyz);
                 vec3 reflectionDirection = reflect(eyeToSurface, normal.xyz);
 
@@ -131,9 +138,11 @@
                 vec3 refractDir = refract(eyeToSurface, normal.xyz, 0.5);
                 vec4 refractColor = textureCube(skyboxTexture, refractDir);
                 refractColor = mix(refractColor, vec4(1.0,1.0,1.0,0.1), 0.1);
+                ////////////////////////////////////////////////////////////////////////
 
 
-
+                // boolean flags
+                ////////////////////////////////////////////////////////////////////////
                 if (!envReflEnabled) {
                     finalEnvironmentColor = vec4(0.0, 0.0, 0.0, 0.1);
                 }
@@ -158,11 +167,16 @@
                         diffuse = diffuse + vec4(0.0, 0.0, 0.0, 0.05);
                         specular = specular + vec4(0.2, 0.2, 0.0, 0.05);
                     }
+                    ambient = ambient + vec4(0.01, 0.01, 0.01, 0.05);
+                    diffuse = diffuse + vec4(0.01, 0.01, 0.01, 0.05);
+                    specular = specular + vec4(0.01, 0.01, 0.01, 0.05);
+                    
                 }
 
                 if (!shadowEnabled) {
                     shadowColorVec = vec4(1.0, 1.0, 1.0, 1.0);
                 }
+                ////////////////////////////////////////////////////////////////////////
 
                 gl_FragColor = (ambient + diffuse + specular) * texColor * shadowColorVec + finalEnvironmentColor;
                 
@@ -263,10 +277,10 @@
     </head>
 
     <body>
-        <h1 id="mode">John's WebGL Night Scene</h1>
+        <h1 id="title" style="margin-left: 170px;">John's WebGL Night Scene</h1>
 
         <div id="displays">
-            <canvas id="webgl" class="box" width="800" height="800">
+            <canvas id="webgl" class="box" width="600" height="600">
                 Please use a browser that supports the "canvas" tag.
             </canvas>
 
@@ -361,6 +375,11 @@
                             <button id="shadowEnable" value="false">Off</button>
                         </td>
                     </tr>
+                    <tr>
+                        <td>Skybox</td>
+                        <td>
+                            <button id="skybox" value="false">Off</button>
+                        </td>
                     <tr>
                         <td>Car Environment Reflections</td>
                         <td>

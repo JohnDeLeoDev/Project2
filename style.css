@@ -1,3 +1,12 @@
+#title {
+    margin-top: 40px;
+    margin-left: 170px;
+    margin-bottom: 0px;
+    font-size: 24px;
+    color: rgba(255, 255, 255, 0.8);
+    font-family: Arial, Helvetica, sans-serif;
+}
+
 #displays {
     display: flex;
     flex-direction: row;
@@ -5,19 +14,28 @@
     margin: 20px;
 }
 
+#information {
+    margin: 20px;
+    width: 600px;
+    overflow: auto;
+}
+
 #webgl {
     margin: 20px;
+    width: 600px;
+    height: 600px;
 }
 
 #page {
+    font-family: Arial, Helvetica, sans-serif;
     background-color: rgba(0, 0, 0, 0.897);
     color: rgba(255, 255, 255, 0.8);
 }
 
 table {
     border-collapse: collapse;
-    width: 100%;
-    font-size: 20px;
+    width: 450px;
+    font-size: 16;
 }
 
 th {

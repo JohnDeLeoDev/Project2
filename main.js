@@ -6,6 +6,27 @@
 // Project uses WebGL to create a scene with real time shadows, lighting, and textures
 // Shadows are created using shadow mapping and depth textures
 // Lighting is created using a point light source
+// Note: Shadows are fully working in chromium browsers, but may not work in firefox
+// Please use a chromium browser for best results
+/***************************************************************************************/
+// Controls
+/***************************************************************************************/
+// l - toggle light on/off
+// s - toggle shadows on/off
+// c - toggle camera orbiting movement on/off
+// d - toggle camera following car on/off
+// m - toggle car movement on/off
+// r - toggle environment reflection on/off
+// f - toggle refraction on/off
+// e - toggle skybox on/off
+// buttons to toggle/see above settings
+// sliders to adjust light properties
+/***************************************************************************************/
+// Extras
+/***************************************************************************************/
+// Car moves in a rounded rectangle path using bezier curves
+// the top of the light changes color based on light state
+// shadows are implemented using texture mapping and projection from the light source
 /***************************************************************************************/
 
 /***************************************************************************************/
@@ -15,7 +36,6 @@ let canvas
 let gl
 let programs = {}
 let models = {}
-models.buffers
 let lights = {}
 let cameras = {}
 let textures = {}
@@ -25,7 +45,7 @@ let textures = {}
 let mainVariables = {
     lightOn: true,
     shadowEnabled: true,
-    carBoundary: 3.2,
+    carBoundary: 3.0,
     carYOffset: -0.3,
     cameraMoving: false,
     cameraFollowing: false,
@@ -39,9 +59,10 @@ let mainVariables = {
     carPathVectors: [],
     inputs: {},
     displays: {},
-    materialShininess: 32,
+    materialShininess: 50,
     envReflEnabled: true,
     refractEnabled: false,
+    skyboxEnabled: true,
 }
 /***************************************************************************************/
 
@@ -219,6 +240,65 @@ mainVariables.smoothCarPath = makePath()
 /***************************************************************************************/
 
 /***************************************************************************************/
+
+function lengthOfVector(vector) {
+    return Math.sqrt(
+        vector[0] * vector[0] + vector[1] * vector[1] + vector[2] * vector[2]
+    )
+}
+
+// finds the length of the car path
+function calculatePathLength() {
+    let length = 0
+    for (let i = 0; i < mainVariables.smoothCarPath.length; i++) {
+        let nextIndex = (i + 1) % mainVariables.smoothCarPath.length
+        let segmentLength = lengthOfVector(
+            subtract(
+                mainVariables.smoothCarPath[nextIndex],
+                mainVariables.smoothCarPath[i]
+            )
+        )
+
+        length += segmentLength
+    }
+    console.log(length)
+    return length
+}
+
+mainVariables.carPathLength = calculatePathLength()
+
+/***************************************************************************************/
+// end of path length calculation
+/***************************************************************************************/
+
+/***************************************************************************************/
+// finds the path vector for the car to follow
+/***************************************************************************************/
+function findPathVector(position) {
+    let closestDistance = 100000
+    let closestIndex = 0
+    for (let i = 0; i < mainVariables.smoothCarPath.length; i++) {
+        let distance = lengthOfVector(
+            subtract(position, mainVariables.smoothCarPath[i])
+        )
+        if (distance < closestDistance) {
+            closestDistance = distance
+            closestIndex = i
+        }
+    }
+
+    let nextIndex = (closestIndex + 1) % mainVariables.smoothCarPath.length
+    let vector = subtract(
+        mainVariables.smoothCarPath[nextIndex],
+        mainVariables.smoothCarPath[closestIndex]
+    )
+    return normalize(vector)
+}
+/***************************************************************************************/
+// end of path vector finding
+/***************************************************************************************/
+
+/***************************************************************************************/
 // makes path vectors for the car to follow
 /***************************************************************************************/
 function makePathVectors() {
@@ -252,6 +332,7 @@ function orbitingCamera() {
     cameras.mainCamera.setFOV(45)
     cameras.mainCamera.moveTo(vec3(x, y, z))
     cameras.mainCamera.lookAt(vec3(0.0, 0.0, 0.0))
+    cameras.mainCamera.setFOV(45)
 
     mainVariables.cameraTime += 0.1
 }
@@ -265,64 +346,69 @@ function orbitingCamera() {
 function followCamera() {
     gl.useProgram(programs.main)
 
-    // find position on car path
-    let rate = 0.05
-    let speed = 0.5
-    let angle = rate * mainVariables.carTime
-    let x = speed * Math.sin(angle)
-    let z = speed * Math.cos(angle)
-    let car = models.car
-    let carPathIndex = Math.floor(
-        (angle * 100) % mainVariables.smoothCarPath.length
-    )
-    let carPathVector = mainVariables.carPathVectors[carPathIndex]
-    let carPathPoint = mainVariables.smoothCarPath[carPathIndex]
-    let carRotation = rotateY(
-        90 - (Math.atan2(carPathVector[2], carPathVector[0]) * 180) / Math.PI
-    )
+    let carPosition = models.car.getPosition()
+    let x = carPosition[0]
+    let y = carPosition[1] + 1.5
+    let z = carPosition[2]
+    cameras.mainCamera.moveTo(vec3(x, y, z))
 
-    cameras.mainCamera.moveTo(vec3(carPathPoint[0], 0.75, carPathPoint[2]))
+    let pathVector = findPathVector(carPosition)
+    let lookAtPoint = add(carPosition, scale(3, pathVector))
+    cameras.mainCamera.lookAt(lookAtPoint)
     cameras.mainCamera.setFOV(90)
-
-    // make camera look forward from the car
-    cameras.mainCamera.lookAt(
-        vec3(
-            carPathPoint[0] + 5 * carPathVector[0],
-            0,
-            carPathPoint[2] + 5 * carPathVector[2]
-        )
-    )
 }
 
 /***************************************************************************************/
 // moves car along smoothCarPath pointed at carPathVectors
 /***************************************************************************************/
 function moveCar() {
+    let currentCarPosition = models.car.getPosition()
     let rate = 0.05
-    let speed = 0.5
     let angle = rate * mainVariables.carTime
-    let x = speed * Math.sin(angle)
-    let z = speed * Math.cos(angle)
     let car = models.car
-    let carPathIndex = Math.floor(
-        (angle * 100) % mainVariables.smoothCarPath.length
-    )
-    let carPathVector = mainVariables.carPathVectors[carPathIndex]
-    let carPathPoint = mainVariables.smoothCarPath[carPathIndex]
-    let newCarAngle =
-        90 - (Math.atan2(carPathVector[2], carPathVector[0]) * 180) / Math.PI
-    let carRotation = rotateY(newCarAngle)
 
-    car.setTranslation(
-        translate(carPathPoint[0], carPathPoint[1], carPathPoint[2])
-    )
-    car.setRotation(carRotation)
+    let distanceTravelled = rate * mainVariables.carTime
+    let travelledLength = distanceTravelled % mainVariables.carPathLength
 
-    // current x, z position of car rounded to 2 decimal places
-    let roundX = Math.round(carPathPoint[0] * 100) / 100
-    let roundZ = Math.round(carPathPoint[2] * 100) / 100
+    let accumulatedLength = 0
+    let carPathIndex = 0
+    while (accumulatedLength < travelledLength) {
+        let nextIndex = (carPathIndex + 1) % mainVariables.smoothCarPath.length
+        let segmentLength = lengthOfVector(
+            subtract(
+                mainVariables.smoothCarPath[nextIndex],
+                mainVariables.smoothCarPath[carPathIndex]
+            )
+        )
+        if (accumulatedLength + segmentLength >= travelledLength) {
+            let remainingLength = travelledLength - accumulatedLength
+            let segmentVector = normalize(
+                subtract(
+                    mainVariables.smoothCarPath[nextIndex],
+                    mainVariables.smoothCarPath[carPathIndex]
+                )
+            )
+            let carPathPoint = add(
+                mainVariables.smoothCarPath[carPathIndex],
+                scale(remainingLength, segmentVector)
+            )
+            let carRotation = rotateY(
+                90 -
+                    (Math.atan2(segmentVector[2], segmentVector[0]) * 180) /
+                        Math.PI
+            )
+            car.setTranslation(
+                translate(carPathPoint[0], carPathPoint[1], carPathPoint[2])
+            )
+            car.setRotation(carRotation)
+            break
+        } else {
+            accumulatedLength += segmentLength
+            carPathIndex = nextIndex
+        }
+    }
 
-    mainVariables.carTime += 0.1
+    mainVariables.carTime += 0.5
 }
 /***************************************************************************************/
 // end of car movement
@@ -391,6 +477,34 @@ function createEventListeners() {
                 'Refraction is now ' +
                     (mainVariables.refractEnabled ? 'enabled' : 'disabled')
             )
+        }
+        if (event.key === 'e') {
+            mainVariables.skyboxEnabled = !mainVariables.skyboxEnabled
+            if (!mainVariables.skyboxEnabled) {
+                mainVariables.envReflEnabled = false
+                mainVariables.refractEnabled = false
+            }
+            console.log(
+                'Skybox is now ' +
+                    (mainVariables.skyboxEnabled ? 'enabled' : 'disabled')
+            )
+        }
+    })
+
+    mainVariables.inputs.skyboxEnabled.addEventListener('click', function () {
+        mainVariables.skyboxEnabled = !mainVariables.skyboxEnabled
+        mainVariables.inputs.skyboxEnabled.textContent =
+            mainVariables.skyboxEnabled ? 'On' : 'Off'
+        mainVariables.inputs.skyboxEnabled.style.backgroundColor =
+            mainVariables.skyboxEnabled ? 'green' : 'red'
+
+        if (!mainVariables.skyboxEnabled) {
+            mainVariables.envReflEnabled = false
+            mainVariables.inputs.envReflEnabled.textContent = 'Off'
+            mainVariables.inputs.envReflEnabled.style.backgroundColor = 'red'
+            mainVariables.refractEnabled = false
+            mainVariables.inputs.refractEnabled.textContent = 'Off'
+            mainVariables.inputs.refractEnabled.style.backgroundColor = 'red'
         }
     })
 
@@ -528,7 +642,6 @@ function connectHTML() {
 
     mainVariables.inputs.specularLight =
         document.getElementById('specularLight')
-    // light on button = 'lightOn'
     mainVariables.inputs.lightOn = document.getElementById('lightOn')
     mainVariables.inputs.lightOn.textContent = 'On'
     mainVariables.inputs.lightOn.style.backgroundColor = 'green'
@@ -565,6 +678,11 @@ function connectHTML() {
     mainVariables.inputs.refractEnabled.textContent = 'Off'
     mainVariables.inputs.refractEnabled.style.backgroundColor = 'red'
     mainVariables.inputs.refractEnabled.style.color = 'white'
+
+    mainVariables.inputs.skyboxEnabled = document.getElementById('skybox')
+    mainVariables.inputs.skyboxEnabled.textContent = 'On'
+    mainVariables.inputs.skyboxEnabled.style.backgroundColor = 'green'
+    mainVariables.inputs.skyboxEnabled.style.color = 'white'
 
     mainVariables.displays.cameraPosition =
         document.getElementById('cameraPosition')
@@ -657,6 +775,12 @@ function updateDisplays() {
     mainVariables.inputs.diffuseLight.value = lights.mainLight.diffuse[0]
     mainVariables.inputs.ambientLight.value = lights.mainLight.ambient[0]
     mainVariables.inputs.specularLight.value = lights.mainLight.specular[0]
+
+    mainVariables.inputs.skyboxEnabled.textContent = mainVariables.skyboxEnabled
+        ? 'On'
+        : 'Off'
+    mainVariables.inputs.skyboxEnabled.style.backgroundColor =
+        mainVariables.skyboxEnabled ? 'green' : 'red'
 }
 
 /***************************************************************************************/
@@ -669,28 +793,24 @@ async function initModels() {
         'https://web.cs.wpi.edu/~jmcuneo/cs4731/project3/stopsign.mtl'
     )
 
-    // Get the lamp
     const lamp = new Model(
         'lamp',
         'https://web.cs.wpi.edu/~jmcuneo/cs4731/project3/lamp.obj',
         'https://web.cs.wpi.edu/~jmcuneo/cs4731/project3/lamp.mtl'
     )
 
-    // Get the car
     const car = new Model(
         'car',
         'https://web.cs.wpi.edu/~jmcuneo/cs4731/project3/car.obj',
         'https://web.cs.wpi.edu/~jmcuneo/cs4731/project3/car.mtl'
     )
 
-    // Get the street
     const street = new Model(
         'street',
         'https://web.cs.wpi.edu/~jmcuneo/cs4731/project3/street.obj',
         'https://web.cs.wpi.edu/~jmcuneo/cs4731/project3/street.mtl'
     )
 
-    // Get the bunny (you will not need this one until Part II)
     const bunny = new Model(
         'bunny',
         'https://web.cs.wpi.edu/~jmcuneo/cs4731/project3/bunny.obj',
@@ -916,34 +1036,6 @@ async function initSkyBoxBuffers() {
     )
 
     programs.skybox.buffers = skyboxBuffers
-
-    // load skybox texture
-    gl.activeTexture(gl.TEXTURE2)
-    programs.skybox.texture = gl.createTexture()
-    gl.bindTexture(gl.TEXTURE_CUBE_MAP, programs.skybox.texture)
-
-    for (let i = 0; i < programs.skybox.model.texImages.length; i++) {
-        let image = programs.skybox.model.texImages[i]
-
-        gl.texImage2D(
-            gl.TEXTURE_CUBE_MAP_POSITIVE_X + i,
-            0,
-            gl.RGBA,
-            gl.RGBA,
-            gl.UNSIGNED_BYTE,
-            image
-        )
-    }
-
-    gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
-    gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
-    gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
-    gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
-
-    // unbind texture
-    gl.bindTexture(gl.TEXTURE_CUBE_MAP, null)
-
-    console.log('Skybox buffers initialized')
 }
 /***************************************************************************************/
 // end of skybox buffer initialization
@@ -1018,6 +1110,39 @@ async function loadTextures() {
         }
         programs.main.models = models
     }
+
+    gl.useProgram(programs.skybox)
+
+    // load skybox texture
+    gl.activeTexture(gl.TEXTURE2)
+    programs.skybox.texture = gl.createTexture()
+    gl.bindTexture(gl.TEXTURE_CUBE_MAP, programs.skybox.texture)
+
+    for (let i = 0; i < programs.skybox.model.texImages.length; i++) {
+        let image = programs.skybox.model.texImages[i]
+
+        gl.texImage2D(
+            gl.TEXTURE_CUBE_MAP_POSITIVE_X + i,
+            0,
+            gl.RGBA,
+            gl.RGBA,
+            gl.UNSIGNED_BYTE,
+            image
+        )
+    }
+
+    gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+    gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+    gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+    gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+
+    // unbind texture
+    gl.bindTexture(gl.TEXTURE_CUBE_MAP, null)
+
+    console.log('Skybox buffers initialized')
+
+    gl.useProgram(programs.main)
+
     console.log('Textures loaded')
 }
 /***************************************************************************************/
@@ -1050,9 +1175,9 @@ function setupLighting() {
 
     let position = vec4(0, findTopOfLamp() + 0.0, 0, 1.0)
 
-    const diffuseLight = [0.4, 0.4, 0.4, 1.0]
+    const diffuseLight = [0.3, 0.3, 0.3, 1.0]
     const ambientLight = [0.1, 0.1, 0.1, 1.0]
-    const specularLight = [0.8, 0.8, 0.8, 1.0]
+    const specularLight = [0.4, 0.4, 0.4, 1.0]
 
     let light = new Light(position, diffuseLight, specularLight, ambientLight)
 
@@ -1683,7 +1808,9 @@ function render() {
 
     // handles rendering skybox
     /***************************************************************************************/
-    drawSkyBox()
+    if (mainVariables.skyboxEnabled) {
+        drawSkyBox()
+    }
     /***************************************************************************************/
     // handles drawing to shadow map
     /***************************************************************************************/
