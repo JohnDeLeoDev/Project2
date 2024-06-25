@@ -309,9 +309,10 @@ function moveCar() {
     )
     let carPathVector = mainVariables.carPathVectors[carPathIndex]
     let carPathPoint = mainVariables.smoothCarPath[carPathIndex]
-    let carRotation = rotateY(
+    let newCarAngle =
         90 - (Math.atan2(carPathVector[2], carPathVector[0]) * 180) / Math.PI
-    )
+    let carRotation = rotateY(newCarAngle)
+
     car.setTranslation(
         translate(carPathPoint[0], carPathPoint[1], carPathPoint[2])
     )
@@ -719,7 +720,8 @@ async function initModels() {
     models.car = car
     models.street = street
     models.car.embeddedObjects.bunny = bunny
-    models.car.embeddedObjects.bunny.transToParent = translate(0, 0.5, 1)
+    models.car.embeddedObjects.bunny.setParent(models.car)
+    models.car.embeddedObjects.bunny.translateToParent = translate(0, 0.5, 1)
     models.car.embeddedObjects.bunny.type = 'child'
 
     for (let model in models) {

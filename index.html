@@ -17,8 +17,8 @@
             uniform mat4 modelTranslation; //
             uniform mat4 modelRotation; //
             uniform mat4 modelScale; //
-
             uniform mat4 shadowMatrix; //
+
 
             varying highp vec2 fTexCoord;
             varying vec4 fDiffuseColor;
@@ -27,7 +27,7 @@
             varying vec4 vPositionInLightSpace;
             varying vec4 fNormal;
             varying vec4 fPosition;
-            varying vec3 uCameraPosition;
+            varying vec3 uCameraPosition;           
 
             varying vec4 vProjectedTexCoords;
 
@@ -38,7 +38,7 @@
                 fSpecularColor = specularColor;
                 fAmbientColor = ambientColor;
 
-                fNormal = normalize(modelRotation * vNormal);
+                fNormal = normalize(modelTranslation * modelRotation * modelScale * vNormal);
 
                 // position of the vertex in the world space
                 fPosition = modelTranslation * modelRotation * modelScale * vPosition;
@@ -73,13 +73,12 @@
             varying vec3 uCameraPosition;
 
             uniform float materialShininess; //
-
-
-            uniform vec4 lightPosition; //
+            
             uniform vec4 lightAmbient; //
             uniform vec4 lightDiffuse; //
             uniform vec4 lightSpecular; //
             uniform vec3 cameraPosition; //
+            uniform vec4 lightPosition; //
 
 
             uniform bool lightOn; //
@@ -110,15 +109,15 @@
 
                 vec4 texColor = useTexture ? texture2D(modelTexture, fTexCoord) : vec4(1.0);
 
-                vec4 normal = normalize(fNormal);
-                vec4 lightDir = normalize(lightPosition - fPosition);
-                vec4 reflectDir = reflect(-lightDir, normal);
-                vec4 viewDir = normalize(-fPosition);
-                float spec = pow(max(dot(viewDir, reflectDir), 0.0), materialShininess);
+                vec3 normal = -fNormal.xyz;
+                vec3 lightDir = normalize(lightPosition.xyz + fPosition.xyz);
+                vec3 E = normalize(fPosition.xyz);
+                vec3 halfVector = normalize(lightDir + E);
 
-                vec4 ambient = lightAmbient * fAmbientColor;
-                vec4 diffuse = lightDiffuse * fDiffuseColor * max(dot(normal, lightDir), 0.0);
-                vec4 specular = lightSpecular * fSpecularColor * spec;
+                float spec = pow(max(dot(normal, halfVector), 0.0), materialShininess);
+                vec4 ambient = fAmbientColor * lightAmbient;
+                vec4 diffuse = fDiffuseColor * lightDiffuse * max(dot(normal, lightDir), 0.0);
+                vec4 specular = fSpecularColor * lightSpecular * spec;
 
                 vec3 eyeToSurface = normalize(cameraPosition - fPosition.xyz);
                 vec3 reflectionDirection = reflect(eyeToSurface, normal.xyz);
@@ -320,7 +319,7 @@
                                 id="materialShininess"
                                 value="0.0"
                                 min="0.0"
-                                max="90.0"
+                                max="95.0"
                                 step="1.0"
                             />
                         </td>
