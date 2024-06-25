@@ -6,8 +6,6 @@
 // Project uses WebGL to create a scene with real time shadows, lighting, and textures
 // Shadows are created using shadow mapping and depth textures
 // Lighting is created using a point light source
-// Note: Shadows are fully working in chromium browsers, but may not work in firefox
-// Please use a chromium browser for best results
 /***************************************************************************************/
 // Controls
 /***************************************************************************************/
@@ -27,6 +25,7 @@
 // Car moves in a rounded rectangle path using bezier curves
 // the top of the light changes color based on light state
 // shadows are implemented using texture mapping and projection from the light source
+// User interface to show scene information and allow for control of scene settings
 /***************************************************************************************/
 
 /***************************************************************************************/
@@ -40,7 +39,7 @@ let lights = {}
 let cameras = {}
 let textures = {}
 /***************************************************************************************/
-// Main variables object used in the project
+// Main variables object used for state management
 /***************************************************************************************/
 let mainVariables = {
     lightOn: true,
@@ -240,14 +239,20 @@ mainVariables.smoothCarPath = makePath()
 /***************************************************************************************/
 
 /***************************************************************************************/
-
+// finds the length of a vector
+/***************************************************************************************/
 function lengthOfVector(vector) {
     return Math.sqrt(
         vector[0] * vector[0] + vector[1] * vector[1] + vector[2] * vector[2]
     )
 }
+/***************************************************************************************/
+// end of vector length calculation
+/***************************************************************************************/
 
-// finds the length of the car path
+/***************************************************************************************/
+// finds the length of the car path in distance
+/***************************************************************************************/
 function calculatePathLength() {
     let length = 0
     for (let i = 0; i < mainVariables.smoothCarPath.length; i++) {
@@ -261,12 +266,10 @@ function calculatePathLength() {
 
         length += segmentLength
     }
-    console.log(length)
     return length
 }
 
 mainVariables.carPathLength = calculatePathLength()
-
 /***************************************************************************************/
 // end of path length calculation
 /***************************************************************************************/
@@ -341,7 +344,8 @@ function orbitingCamera() {
 /***************************************************************************************/
 
 /***************************************************************************************/
-// handles camera placement when camera following is enabled - camera follows car fromcar's position
+// handles camera placement when camera following is enabled
+// camera follows car from car's position
 /***************************************************************************************/
 function followCamera() {
     gl.useProgram(programs.main)
@@ -357,6 +361,9 @@ function followCamera() {
     cameras.mainCamera.lookAt(lookAtPoint)
     cameras.mainCamera.setFOV(90)
 }
+/***************************************************************************************/
+// end of camera following
+/***************************************************************************************/
 
 /***************************************************************************************/
 // moves car along smoothCarPath pointed at carPathVectors
@@ -418,6 +425,8 @@ function moveCar() {
 // creates all event listeners needed for the project
 /***************************************************************************************/
 function createEventListeners() {
+    // event listener for key presses
+    /*************************************************************************************/
     window.addEventListener('keydown', function (event) {
         if (event.key === 'l') {
             mainVariables.lightOn = !mainVariables.lightOn
@@ -490,7 +499,12 @@ function createEventListeners() {
             )
         }
     })
+    /*************************************************************************************/
+    // end of key press event listener
+    /*************************************************************************************/
 
+    // event listeners for sliders and buttons
+    /*************************************************************************************/
     mainVariables.inputs.skyboxEnabled.addEventListener('click', function () {
         mainVariables.skyboxEnabled = !mainVariables.skyboxEnabled
         mainVariables.inputs.skyboxEnabled.textContent =
@@ -701,6 +715,7 @@ function connectHTML() {
         document.getElementById('cameraLookAt')
     mainVariables.displays.carPosition = document.getElementById('carPosition')
     mainVariables.displays.carRotation = document.getElementById('carRotation')
+
     mainVariables.displays.lightPosition =
         document.getElementById('lightPosition')
     mainVariables.inputs.materialShininess =
@@ -713,7 +728,7 @@ function connectHTML() {
 /***************************************************************************************/
 
 /***************************************************************************************/
-// Updates display elements
+// Updates display elements on HTML page
 /***************************************************************************************/
 function updateDisplays() {
     let cameraX = cameras.mainCamera.eye[0].toFixed(2)

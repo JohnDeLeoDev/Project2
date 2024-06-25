@@ -31,6 +31,8 @@
 
             varying vec4 vProjectedTexCoords;
 
+            ////////////////////////////////////////////////
+            
             void main(void) {
                 fTexCoord = vTexCoord;
 
@@ -40,17 +42,16 @@
 
                 fNormal = normalize(modelTranslation * modelRotation * modelScale * vNormal);
 
-                // position of the vertex in the world space
                 fPosition = modelTranslation * modelRotation * modelScale * vPosition;
 
                 vProjectedTexCoords = shadowMatrix * fPosition;
 
-                // get x,y, z coordinates of the camera position
                 uCameraPosition = vec3(cameraView[3][0], cameraView[3][1], cameraView[3][2]);
 
-                // position of the vertex in the camera space
                 gl_Position = cameraProjection * cameraView * fPosition;
             }
+
+            ////////////////////////////////////////////////
         </script>
 
         <script id="main-fshader" type="x-shader/x-fragment">
@@ -200,13 +201,10 @@
             varying vec4 vPositionInLightSpace;
 
             void main(void) {
-                // position of the vertex in the world space
                 fPosition = modelTranslation * modelRotation * modelScale * vPosition;
 
                 vPositionInLightSpace = lightProjection * lightView * fPosition;
 
-
-                // position of the vertex in the camera space
                 gl_Position = lightProjection * lightView * fPosition;
             }
         </script>
@@ -234,16 +232,13 @@
             uniform mat4 modelRotation; // rotation matrix of the model
             uniform mat4 modelScale; // scale matrix of the model
 
-
             varying vec4 fPosition; // position of the vertex in the world space
 
             void main(void) {
-                // position of the vertex in the world space
                 fPosition = vPosition;
 
                 vec3 fPosition3 = vec3(fPosition);
 
-                // position of the vertex in the camera space
                 gl_Position = cameraProjection * cameraView * vec4(fPosition3, 0.1);
             }
         </script>
