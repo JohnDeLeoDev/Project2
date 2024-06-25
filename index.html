@@ -99,7 +99,7 @@
                 vec3 shadowCoord = vProjectedTexCoords.xyz / vProjectedTexCoords.w;
                 float fDepth = shadowCoord.z;
 
-                float shadowDepth = texture2D(shadowTexture, shadowCoord.xy).z;
+                float shadowDepth = texture2D(shadowTexture, shadowCoord.xy).r;
 
                 float shadowColor = fDepth > shadowDepth + bias ? 0.2 : 1.0;
 

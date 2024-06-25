@@ -539,6 +539,12 @@ function createEventListeners() {
             mainVariables.cameraMoving ? 'On' : 'Off'
         mainVariables.inputs.cameraOrbit.style.backgroundColor =
             mainVariables.cameraMoving ? 'green' : 'red'
+
+        if (mainVariables.cameraMoving) {
+            mainVariables.cameraFollowing = false
+            mainVariables.inputs.cameraFollow.textContent = 'Off'
+            mainVariables.inputs.cameraFollow.style.backgroundColor = 'red'
+        }
     })
 
     mainVariables.inputs.animate.addEventListener('click', function () {
@@ -556,6 +562,11 @@ function createEventListeners() {
             mainVariables.cameraFollowing ? 'On' : 'Off'
         mainVariables.inputs.cameraFollow.style.backgroundColor =
             mainVariables.cameraFollowing ? 'green' : 'red'
+        if (mainVariables.cameraFollowing) {
+            mainVariables.cameraMoving = false
+            mainVariables.inputs.cameraOrbit.textContent = 'Off'
+            mainVariables.inputs.cameraOrbit.style.backgroundColor = 'red'
+        }
     })
 
     mainVariables.inputs.diffuseLight.addEventListener('input', function () {
@@ -1175,9 +1186,9 @@ function setupLighting() {
 
     let position = vec4(0, findTopOfLamp() + 0.0, 0, 1.0)
 
-    const diffuseLight = [0.3, 0.3, 0.3, 1.0]
-    const ambientLight = [0.1, 0.1, 0.1, 1.0]
-    const specularLight = [0.4, 0.4, 0.4, 1.0]
+    const diffuseLight = [0.4, 0.4, 0.4, 1.0]
+    const ambientLight = [0.2, 0.2, 0.2, 1.0]
+    const specularLight = [0.5, 0.5, 0.5, 1.0]
 
     let light = new Light(position, diffuseLight, specularLight, ambientLight)
 
@@ -1373,6 +1384,7 @@ function addUniformsMain() {
     let skyboxTexture = gl.getUniformLocation(programs.main, 'skyboxTexture')
     let envReflEnabled = gl.getUniformLocation(programs.main, 'envReflEnabled')
     let refractEnabled = gl.getUniformLocation(programs.main, 'refractEnabled')
+    let shadowTexture = gl.getUniformLocation(programs.main, 'shadowTexture')
 
     gl.uniform1f(shadowEnabled, 1)
 
@@ -1395,6 +1407,7 @@ function addUniformsMain() {
     programs.main.uniforms.skyboxTexture = skyboxTexture
     programs.main.uniforms.envReflEnabled = envReflEnabled
     programs.main.uniforms.refractEnabled = refractEnabled
+    programs.main.uniforms.shadowTexture = shadowTexture
 }
 /***************************************************************************************/
 // end of adding uniforms to main program
@@ -1654,17 +1667,19 @@ function drawModel(program, model) {
         mainVariables.materialShininess
     )
 
-    gl.activeTexture(gl.TEXTURE0)
-    gl.bindTexture(gl.TEXTURE_2D, programs.shadow.depthTexture)
-    gl.uniform1i(program.uniforms.shadowTexture, 0)
-
-    gl.activeTexture(gl.TEXTURE1)
-    gl.bindTexture(gl.TEXTURE_2D, model.texture)
-    gl.uniform1i(program.uniforms.modelTexture, 1)
+    if (model.textured) {
+        gl.activeTexture(gl.TEXTURE1)
+        gl.bindTexture(gl.TEXTURE_2D, model.texture)
+        gl.uniform1i(program.uniforms.modelTexture, 1)
+    }
 
     gl.activeTexture(gl.TEXTURE2)
     gl.bindTexture(gl.TEXTURE_CUBE_MAP, programs.skybox.texture)
     gl.uniform1i(program.uniforms.skyboxTexture, 2)
+
+    gl.activeTexture(gl.TEXTURE0)
+    gl.bindTexture(gl.TEXTURE_2D, programs.shadow.depthTexture)
+    gl.uniform1i(program.uniforms.shadowTexture, 0)
 
     gl.drawArrays(gl.TRIANGLES, 0, model.getVertices().length / 4)
 
@@ -1673,8 +1688,10 @@ function drawModel(program, model) {
     gl.activeTexture(gl.TEXTURE0)
     gl.bindTexture(gl.TEXTURE_2D, null)
 
-    gl.activeTexture(gl.TEXTURE1)
-    gl.bindTexture(gl.TEXTURE_2D, null)
+    if (model.textured) {
+        gl.activeTexture(gl.TEXTURE1)
+        gl.bindTexture(gl.TEXTURE_2D, null)
+    }
 
     gl.activeTexture(gl.TEXTURE2)
     gl.bindTexture(gl.TEXTURE_CUBE_MAP, null)
@@ -1829,7 +1846,7 @@ function render() {
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
     for (let [name, model] of Object.entries(models)) {
-        if (model.name === 'lamp') {
+        if (model.name === 'lamp' || model.name === 'street') {
             continue
         }
         drawShadow(programs.shadow, model)
